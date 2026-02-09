@@ -1,7 +1,3 @@
-[providers]
-node = true
-php = false
-
 [phases.setup]
 nixPkgs = ['nodejs_18']
 
