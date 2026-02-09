@@ -1,6 +1,9 @@
+[providers]
+node = true
+php = false
+
 [phases.setup]
-nixPkgs = ['nodejs_18', 'php83', 'php83Packages.composer']
-aptPkgs = ['php-curl', 'php-mbstring']
+nixPkgs = ['nodejs_18']
 
 [phases.install]
 cmds = ['npm install']
