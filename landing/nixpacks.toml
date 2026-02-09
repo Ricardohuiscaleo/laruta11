@@ -1,0 +1,12 @@
+[phases.setup]
+nixPkgs = ['nodejs_18', 'php83', 'php83Packages.composer']
+aptPkgs = ['php-curl', 'php-mbstring']
+
+[phases.install]
+cmds = ['npm install']
+
+[phases.build]
+cmds = ['npm run build']
+
+[start]
+cmd = 'npm run preview'
