@@ -1,11 +1,11 @@
 [phases.setup]
-nixPkgs = ['nodejs_18']
+nixPkgs = ["nodejs-18_x"]
 
 [phases.install]
-cmds = ['npm install', 'npm install -g serve']
+cmds = ["npm ci"]
 
 [phases.build]
-cmds = ['npm run build']
+cmds = ["npm run build"]
 
 [start]
-cmd = 'serve dist -l 3000'
+cmd = "npx serve dist -l 3000"
