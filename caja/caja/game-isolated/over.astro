@@ -1,0 +1,193 @@
+---
+// Game Over page for La Ruta 11 Foodtrucks
+---
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚚 Game Over - La Ruta 11</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2c3e50 100%);
+            color: #fff;
+            font-family: 'Press Start 2P', cursive;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .game-over-container {
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 15px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .crash-title {
+            color: #e74c3c;
+            font-size: clamp(1.5rem, 4vw, 2.5rem);
+            margin-bottom: 30px;
+            animation: flashRed 2s infinite;
+        }
+        
+        .crash-content {
+            line-height: 1.8;
+            margin-bottom: 30px;
+        }
+        
+        .crash-content p {
+            margin: 20px 0;
+            font-size: clamp(0.8rem, 2.5vw, 1rem);
+        }
+        
+        .accident-text {
+            color: #ff6b35;
+        }
+        
+        .truck-survived {
+            color: #2ecc71;
+        }
+        
+        .driver-mystery {
+            color: #f1c40f;
+        }
+        
+        .result-summary {
+            background: rgba(0,0,0,0.6);
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #ffc107;
+            margin: 20px 0;
+        }
+        
+        .ticket-count {
+            color: #f1c40f;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        
+        .prize-success {
+            color: #2ecc71;
+            animation: celebration 2s infinite;
+        }
+        
+        .no-prize {
+            color: #e74c3c;
+        }
+        
+        .restart-button {
+            background: linear-gradient(45deg, #e67e22, #d35400);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: clamp(0.8rem, 2vw, 1rem);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            animation: restartPulse 2s infinite;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .restart-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(230, 126, 34, 0.6);
+        }
+        
+        @keyframes flashRed {
+            0%, 100% { color: #e74c3c; }
+            50% { color: #ff6b7a; text-shadow: 0 0 20px rgba(231, 76, 60, 0.8); }
+        }
+        
+        @keyframes celebration {
+            0%, 100% { transform: scale(1); }
+            25% { transform: scale(1.1) rotate(5deg); }
+            75% { transform: scale(1.1) rotate(-5deg); }
+        }
+        
+        @keyframes restartPulse {
+            0%, 100% { 
+                transform: scale(1); 
+                box-shadow: 0 4px 15px rgba(230, 126, 34, 0.4);
+            }
+            50% { 
+                transform: scale(1.05); 
+                box-shadow: 0 8px 25px rgba(230, 126, 34, 0.8);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .game-over-container {
+                padding: 20px;
+                margin: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-over-container">
+        <h1 class="crash-title">¡RAYOS!</h1>
+        
+        <div class="crash-content">
+            <p class="accident-text">💥 Creo que tuvimos un pequeño accidente, salimos volando 🫨 pero no te preocupes...</p>
+            
+            <p class="truck-survived">🚚 ¡El FOODTRUCK ha sobrevivido ❤️!</p>
+            
+            <p class="driver-mystery">🤔 ¿Y el chofer? Bueno... a veces muere, a veces revive. No sé la verdad, pero ¡el Foodtruck está bien!</p>
+        </div>
+        
+        <div class="result-summary" id="results">
+            <p>📊 <strong style="color: #1abc9c;">Tickets recogidos:</strong> <span class="ticket-count" id="score">0</span></p>
+            <p id="prizes">😢 <span class="no-prize">No conseguiste descuentos esta vez...</span></p>
+        </div>
+        
+        <a href="/game" class="restart-button">🔄 Jugar de Nuevo</a>
+    </div>
+
+    <script>
+        // Reproducir sonido de Game Over
+        const overSound = new Audio('/music-game/over.mp3');
+        overSound.volume = 0.7;
+        overSound.play().catch(err => console.warn('Over sound failed:', err));
+        
+        // Obtener datos del juego desde localStorage o URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        const score = urlParams.get('score') || '0';
+        const discount = urlParams.get('discount') || '0';
+        
+        // Actualizar la información mostrada
+        const scoreEl = document.getElementById('score');
+        if (scoreEl) scoreEl.textContent = score;
+        
+        const prizesEl = document.getElementById('prizes');
+        if (prizesEl && parseFloat(discount) > 0) {
+            prizesEl.innerHTML = `🎆 <span class="prize-success">¡Conseguiste ${discount}% de descuento!</span>`;
+        }
+        
+        // Auto-redirect después de 10 segundos (opcional)
+        setTimeout(() => {
+            const button = document.querySelector('.restart-button') as HTMLElement;
+            if (button) {
+                button.style.animation = 'restartPulse 0.5s infinite';
+                button.textContent = '🔄 Redirigiendo...';
+            }
+        }, 8000);
+    </script>
+</body>
+</html>

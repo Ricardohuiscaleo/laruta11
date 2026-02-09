@@ -1,0 +1,353 @@
+---
+import fs from 'fs';
+import path from 'path';
+
+const rootDir = process.cwd();
+
+// Escanear APIs
+const apiDir = path.join(rootDir, 'api');
+const apis = [];
+function scanApis(dir, base = '') {
+    if (!fs.existsSync(dir)) return;
+    fs.readdirSync(dir).forEach(file => {
+        const fullPath = path.join(dir, file);
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+            scanApis(fullPath, base + file + '/');
+        } else if (file.endsWith('.php')) {
+            const content = fs.readFileSync(fullPath, 'utf-8');
+            const tables = new Set();
+            const sqlPatterns = [
+                /FROM\s+`?(\w+)`?/gi,
+                /INTO\s+`?(\w+)`?/gi,
+                /UPDATE\s+`?(\w+)`?/gi,
+                /JOIN\s+`?(\w+)`?/gi,
+            ];
+            sqlPatterns.forEach(pattern => {
+                let match;
+                while ((match = pattern.exec(content)) !== null) {
+                    const table = match[1];
+                    if (!['select', 'where', 'order', 'group', 'limit', 'values'].includes(table.toLowerCase())) {
+                        tables.add(table);
+                    }
+                }
+            });
+            const name = '/api/' + base + file;
+            apis.push({ 
+                name,
+                fullPath,
+                tables: [...tables],
+                usedBy: [],
+                type: 'endpoint'
+            });
+        }
+    });
+}
+scanApis(apiDir);
+
+// Detectar tipo
+apis.forEach(api => {
+    const name = api.name.toLowerCase();
+    if (name.includes('config.php')) api.type = 'config';
+    else if (name.includes('manager') || name.includes('helper') || name.includes('class')) api.type = 'class';
+    else if (name.includes('callback') || name.includes('webhook')) api.type = 'webhook';
+    else if (name.includes('cron') || name.includes('scheduled')) api.type = 'cron';
+});
+
+// Escanear archivos frontend
+const allFiles = [];
+function scanFiles(dir, base = '') {
+    if (!fs.existsSync(dir)) return;
+    const files = fs.readdirSync(dir);
+    files.forEach(file => {
+        if (file === 'node_modules' || file === 'dist' || file === '.git') return;
+        const fullPath = path.join(dir, file);
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+            scanFiles(fullPath, base + file + '/');
+        } else {
+            const ext = path.extname(file);
+            if (['.astro', '.jsx', '.tsx', '.js', '.ts'].includes(ext)) {
+                allFiles.push({ path: base + file, fullPath });
+            }
+        }
+    });
+}
+scanFiles(path.join(rootDir, 'src'));
+
+// Buscar uso
+apis.forEach(api => {
+    const apiFileName = api.name.replace('/api/', '');
+    allFiles.forEach(file => {
+        try {
+            const content = fs.readFileSync(file.fullPath, 'utf-8');
+            if (content.includes(apiFileName)) {
+                api.usedBy.push(file.path);
+            }
+        } catch {}
+    });
+});
+
+// Detectar includes PHP
+apis.forEach(api => {
+    apis.forEach(otherApi => {
+        if (api.name === otherApi.name) return;
+        try {
+            const content = fs.readFileSync(otherApi.fullPath, 'utf-8');
+            const fileName = api.name.split('/').pop();
+            if (content.match(new RegExp(`(?:require|include)(?:_once)?.*${fileName}`, 'i'))) {
+                if (!api.usedBy.includes(`${otherApi.name} (PHP include)`)) {
+                    api.usedBy.push(`${otherApi.name} (PHP include)`);
+                }
+            }
+        } catch {}
+    });
+});
+
+const usedApis = apis.filter(a => a.usedBy.length > 0);
+const unusedApis = apis.filter(a => a.usedBy.length === 0);
+const allTables = [...new Set(apis.flatMap(a => a.tables))].sort();
+const byType = {
+    config: apis.filter(a => a.type === 'config'),
+    class: apis.filter(a => a.type === 'class'),
+    webhook: apis.filter(a => a.type === 'webhook'),
+    cron: apis.filter(a => a.type === 'cron'),
+    endpoint: apis.filter(a => a.type === 'endpoint')
+};
+---
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis Final - Ruta 11</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: system-ui, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            padding: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .stat {
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #334155;
+        }
+        .stat .num { font-size: 2.5em; font-weight: bold; color: #667eea; }
+        .stat .label { color: #94a3b8; margin-top: 5px; font-size: 0.85em; }
+        .stat.danger .num { color: #ef4444; }
+        .stat.success .num { color: #10b981; }
+        .stat.warning .num { color: #f59e0b; }
+        
+        .section {
+            background: #1e293b;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .section-header {
+            background: #667eea;
+            padding: 15px 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .section-header:hover { background: #5568d3; }
+        .section-header.warning { background: #f59e0b; }
+        .section-header.success { background: #10b981; }
+        .section-body {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .section-body.collapsed { display: none; }
+        
+        .item {
+            padding: 12px 20px;
+            border-bottom: 1px solid #334155;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+        }
+        .item:hover { background: #334155; }
+        .item-name { color: #e2e8f0; margin-bottom: 5px; }
+        .item-meta { color: #94a3b8; font-size: 0.9em; margin-top: 5px; }
+        .badge {
+            display: inline-block;
+            background: #334155;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-right: 5px;
+            font-size: 0.85em;
+        }
+        .badge.success { background: #059669; }
+        .badge.danger { background: #dc2626; }
+        .badge.warning { background: #d97706; }
+        .badge.info { background: #3b82f6; }
+        
+        .search {
+            padding: 15px 20px;
+            background: #0f172a;
+            border-bottom: 1px solid #334155;
+        }
+        .search input {
+            width: 100%;
+            padding: 10px 15px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            color: #e2e8f0;
+        }
+        .search input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .alert {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #f59e0b;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 Análisis Final del Proyecto</h1>
+        <p>Detección automática: Clases PHP, Includes, Callbacks, Webhooks</p>
+    </div>
+    
+    <div class="stats">
+        <div class="stat">
+            <div class="num">{apis.length}</div>
+            <div class="label">Total APIs</div>
+        </div>
+        <div class="stat success">
+            <div class="num">{usedApis.length}</div>
+            <div class="label">APIs Usadas</div>
+        </div>
+        <div class="stat danger">
+            <div class="num">{unusedApis.length}</div>
+            <div class="label">APIs NO Usadas</div>
+        </div>
+        <div class="stat warning">
+            <div class="num">{byType.class.length}</div>
+            <div class="label">Clases PHP</div>
+        </div>
+        <div class="stat warning">
+            <div class="num">{byType.webhook.length}</div>
+            <div class="label">Webhooks</div>
+        </div>
+        <div class="stat">
+            <div class="num">{allTables.length}</div>
+            <div class="label">Tablas BD</div>
+        </div>
+    </div>
+    
+    {unusedApis.filter(a => a.type === 'endpoint').length > 0 && (
+        <div class="alert">
+            ⚠️ <strong>{unusedApis.filter(a => a.type === 'endpoint').length} APIs endpoint</strong> no están siendo usadas.
+        </div>
+    )}
+    
+    <div class="section">
+        <div class="section-header warning" onclick="this.nextElementSibling.classList.toggle('collapsed')">
+            <span>🔧 Clases PHP / Helpers ({byType.class.length})</span>
+            <span>▼</span>
+        </div>
+        <div class="section-body">
+            {byType.class.map(api => (
+                <div class="item">
+                    <div class="item-name">{api.name}</div>
+                    <div class="item-meta">
+                        {api.usedBy.length > 0 ? (
+                            <>
+                                <span class="badge success">{api.usedBy.length} usos</span>
+                                <div>Incluida en: {api.usedBy.join(', ')}</div>
+                            </>
+                        ) : (
+                            <span class="badge warning">No detectada</span>
+                        )}
+                    </div>
+                </div>
+            ))}
+        </div>
+    </div>
+    
+    <div class="section">
+        <div class="section-header success" onclick="this.nextElementSibling.nextElementSibling.classList.toggle('collapsed')">
+            <span>✅ APIs USADAS ({usedApis.filter(a => a.type === 'endpoint').length})</span>
+            <span>▼</span>
+        </div>
+        <div class="search">
+            <input type="text" placeholder="🔍 Buscar..." oninput="filterItems(this, 'used-list')">
+        </div>
+        <div class="section-body" id="used-list">
+            {usedApis.filter(a => a.type === 'endpoint').map(api => (
+                <div class="item" data-search={api.name}>
+                    <div class="item-name">{api.name}</div>
+                    <div class="item-meta">
+                        <span class="badge success">{api.usedBy.length} usos</span>
+                        {api.tables.length > 0 && <span class="badge info">{api.tables.length} tablas</span>}
+                        <div>Usada en: {api.usedBy.join(', ')}</div>
+                        {api.tables.length > 0 && <div>Tablas: {api.tables.join(', ')}</div>}
+                    </div>
+                </div>
+            ))}
+        </div>
+    </div>
+    
+    <div class="section">
+        <div class="section-header" onclick="this.nextElementSibling.nextElementSibling.classList.toggle('collapsed')">
+            <span>❌ APIs NO USADAS ({unusedApis.filter(a => a.type === 'endpoint').length})</span>
+            <span>▼</span>
+        </div>
+        <div class="search">
+            <input type="text" placeholder="🔍 Buscar..." oninput="filterItems(this, 'unused-list')">
+        </div>
+        <div class="section-body collapsed" id="unused-list">
+            {unusedApis.filter(a => a.type === 'endpoint').map(api => (
+                <div class="item" data-search={api.name}>
+                    <div class="item-name">{api.name}</div>
+                    <div class="item-meta">
+                        <span class="badge danger">NO USADA</span>
+                        {api.tables.length > 0 && <span class="badge info">{api.tables.length} tablas</span>}
+                        {api.tables.length > 0 && <div>Tablas: {api.tables.join(', ')}</div>}
+                    </div>
+                </div>
+            ))}
+        </div>
+    </div>
+
+    <script is:inline>
+        function filterItems(input, listId) {
+            const query = input.value.toLowerCase();
+            const items = document.querySelectorAll(`#${listId} .item`);
+            items.forEach(item => {
+                const text = item.dataset.search.toLowerCase();
+                item.style.display = text.includes(query) ? 'block' : 'none';
+            });
+        }
+    </script>
+</body>
+</html>
