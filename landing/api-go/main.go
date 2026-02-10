@@ -144,7 +144,11 @@ func (h *S3Handler) listImages(c *gin.Context) {
 		})
 	}
 
-	c.JSON(200, gin.H{"success": true, "images": images})
+	c.JSON(200, Response{
+		Success: true,
+		Message: "Images listed",
+		Data:    gin.H{"images": images},
+	})
 }
 
 func isImageFile(filename string) bool {

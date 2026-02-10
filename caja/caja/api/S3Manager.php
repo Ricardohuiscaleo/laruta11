@@ -192,6 +192,47 @@ class S3Manager {
         return $this->config['s3_url'] . '/' . $key;
     }
     
+    public function listImages($folder = 'menu') {
+        $date = gmdate('D, d M Y H:i:s T');
+        $resource = '/' . $this->config['s3_bucket'] . '/';
+        $stringToSign = "GET\n\n\n{$date}\n{$resource}";
+        $signature = base64_encode(hash_hmac('sha1', $stringToSign, $this->config['aws_secret_access_key'], true));
+        
+        $url = 'https://' . $this->config['s3_bucket'] . '.s3.amazonaws.com/?prefix=' . $folder . '/';
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Date: ' . $date,
+            'Authorization: AWS ' . $this->config['aws_access_key_id'] . ':' . $signature
+        ]);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        
+        $result = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        $images = [];
+        if ($httpCode === 200 && $result) {
+            $xml = simplexml_load_string($result);
+            if ($xml && isset($xml->Contents)) {
+                foreach ($xml->Contents as $content) {
+                    $key = (string)$content->Key;
+                    if (preg_match('/\.(jpg|jpeg|png|gif|webp)$/i', $key)) {
+                        $images[] = [
+                            'key' => $key,
+                            'name' => basename($key),
+                            'url' => 'https://' . $this->config['s3_bucket'] . '.s3.amazonaws.com/' . $key,
+                            'size' => (int)$content->Size,
+                            'modified' => (string)$content->LastModified
+                        ];
+                    }
+                }
+            }
+        }
+        
+        return $images;
+    }
+    
     public function deleteFile($key) {
         // Simple DELETE request
         $url = "https://{$this->config['s3_bucket']}.s3.{$this->config['s3_region']}.amazonaws.com/{$key}";
