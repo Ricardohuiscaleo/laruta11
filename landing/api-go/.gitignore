@@ -8,7 +8,6 @@ api
 # Go
 *.test
 *.out
-go.sum
 
 # Env
 .env
