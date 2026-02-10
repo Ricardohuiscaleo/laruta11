@@ -127,7 +127,7 @@ func (h *S3Handler) listImages(c *gin.Context) {
 		})
 	}
 
-	c.JSON(200, Response{Success: true, Data: gin.H{"images": images}})
+	c.JSON(200, gin.H{"success": true, "images": images})
 }
 
 func (h *S3Handler) uploadImage(c *gin.Context) {
