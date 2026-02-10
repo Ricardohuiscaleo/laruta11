@@ -2,6 +2,8 @@ FROM golang:1.21-alpine
 
 WORKDIR /app
 
+ENV GOSUMDB=off
+
 COPY go.mod .
 RUN go mod download
 
