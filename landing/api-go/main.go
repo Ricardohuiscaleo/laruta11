@@ -173,6 +173,14 @@ func (h *S3Handler) uploadImage(c *gin.Context) {
 	filename := c.PostForm("custom_name")
 	if filename == "" {
 		filename = header.Filename
+	} else {
+		// If custom_name provided, preserve original extension
+		if idx := strings.LastIndex(header.Filename, "."); idx >= 0 {
+			ext := header.Filename[idx:]
+			if !strings.HasSuffix(strings.ToLower(filename), strings.ToLower(ext)) {
+				filename += ext
+			}
+		}
 	}
 
 	// Add menu/ prefix

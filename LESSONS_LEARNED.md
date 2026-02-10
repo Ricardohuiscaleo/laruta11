@@ -77,7 +77,25 @@ s3://laruta11-images/
 
 ---
 
-### 6. Go Rename - CopySource URL Encoding
+### 6. Go Upload - Missing File Extension
+**Problema**: Archivo sube a S3 pero no aparece en frontend. Key: `menu/barcodecc` sin extensión
+
+**Causa**: `custom_name` del frontend no preserva extensión original del archivo
+
+**Solución**:
+```go
+if filename := c.PostForm("custom_name"); filename != "" {
+    // Extract extension from original file
+    if idx := strings.LastIndex(header.Filename, "."); idx >= 0 {
+        ext := header.Filename[idx:]
+        if !strings.HasSuffix(strings.ToLower(filename), strings.ToLower(ext)) {
+            filename += ext  // Append .jpeg, .png, etc.
+        }
+    }
+}
+```
+
+**Lección**: Siempre preservar extensión de archivo original. `isImageFile()` filtra por extensión.
 **Problema**: Rename falla con archivos que tienen espacios o caracteres especiales
 
 **Causa**: `CopySource` en S3 debe estar URL encoded
@@ -93,6 +111,8 @@ CopySource: aws.String(copySource)
 **Lección**: S3 CopySource requiere URL encoding. Usar `url.PathEscape()` no `url.QueryEscape()`.
 
 ---
+
+### 7. Go Rename - CopySource URL Encoding
 
 ## ✅ CHECKLIST DE DEPLOY
 
