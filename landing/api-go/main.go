@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -99,6 +100,8 @@ func (h *S3Handler) HandleS3(c *gin.Context) {
 		h.uploadImage(c)
 	case "delete":
 		h.deleteImage(c)
+	case "rename":
+		h.renameImage(c)
 	case "test":
 		h.testConnection(c)
 	default:
@@ -107,8 +110,11 @@ func (h *S3Handler) HandleS3(c *gin.Context) {
 }
 
 func (h *S3Handler) listImages(c *gin.Context) {
+	prefix := "menu/" // Filtrar solo carpeta menu
+	
 	result, err := h.client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(h.bucket),
+		Prefix: aws.String(prefix),
 	})
 
 	if err != nil {
@@ -118,16 +124,36 @@ func (h *S3Handler) listImages(c *gin.Context) {
 
 	images := []Image{}
 	for _, obj := range result.Contents {
+		key := *obj.Key
+		if !isImageFile(key) {
+			continue
+		}
+		
+		// Extract basename like PHP does
+		name := key
+		if idx := strings.LastIndex(key, "/"); idx >= 0 {
+			name = key[idx+1:]
+		}
+		
 		images = append(images, Image{
-			Key:      *obj.Key,
-			URL:      fmt.Sprintf("https://%s.s3.amazonaws.com/%s", h.bucket, *obj.Key),
-			Name:     *obj.Key,
+			Key:      key,
+			URL:      fmt.Sprintf("https://%s.s3.amazonaws.com/%s", h.bucket, key),
+			Name:     name,
 			Size:     *obj.Size,
 			Modified: *obj.LastModified,
 		})
 	}
 
 	c.JSON(200, gin.H{"success": true, "images": images})
+}
+
+func isImageFile(filename string) bool {
+	idx := strings.LastIndex(filename, ".")
+	if idx < 0 || idx == len(filename)-1 {
+		return false
+	}
+	ext := strings.ToLower(filename[idx+1:])
+	return ext == "jpg" || ext == "jpeg" || ext == "png" || ext == "gif" || ext == "webp"
 }
 
 func (h *S3Handler) uploadImage(c *gin.Context) {
@@ -183,6 +209,57 @@ func (h *S3Handler) deleteImage(c *gin.Context) {
 	}
 
 	c.JSON(200, Response{Success: true, Message: "Image deleted"})
+}
+
+func (h *S3Handler) renameImage(c *gin.Context) {
+	oldKey := c.PostForm("old_key")
+	newName := c.PostForm("new_name")
+	folder := c.DefaultPostForm("folder", "menu")
+
+	if oldKey == "" || newName == "" {
+		c.JSON(400, Response{Success: false, Error: "old_key and new_name required"})
+		return
+	}
+
+	// Add extension if missing
+	if idx := strings.LastIndex(oldKey, "."); idx >= 0 {
+		ext := oldKey[idx:]
+		if !strings.HasSuffix(strings.ToLower(newName), strings.ToLower(ext)) {
+			newName += ext
+		}
+	}
+
+	newKey := folder + "/" + newName
+
+	// Copy object
+	_, err := h.client.CopyObject(context.TODO(), &s3.CopyObjectInput{
+		Bucket:     aws.String(h.bucket),
+		CopySource: aws.String(h.bucket + "/" + oldKey),
+		Key:        aws.String(newKey),
+	})
+
+	if err != nil {
+		c.JSON(500, Response{Success: false, Error: "Copy failed: " + err.Error()})
+		return
+	}
+
+	// Delete old object
+	_, err = h.client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
+		Bucket: aws.String(h.bucket),
+		Key:    aws.String(oldKey),
+	})
+
+	if err != nil {
+		c.JSON(500, Response{Success: false, Error: "Delete old failed: " + err.Error()})
+		return
+	}
+
+	newURL := fmt.Sprintf("https://%s.s3.amazonaws.com/%s", h.bucket, newKey)
+	c.JSON(200, Response{
+		Success: true,
+		Message: "Image renamed",
+		Data:    gin.H{"old_key": oldKey, "new_key": newKey, "new_url": newURL},
+	})
 }
 
 func (h *S3Handler) testConnection(c *gin.Context) {
