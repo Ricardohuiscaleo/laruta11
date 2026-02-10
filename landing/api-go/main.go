@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -168,18 +170,30 @@ func (h *S3Handler) uploadImage(c *gin.Context) {
 	}
 	defer file.Close()
 
-	key := c.PostForm("custom_name")
-	if key == "" {
-		key = header.Filename
+	filename := c.PostForm("custom_name")
+	if filename == "" {
+		filename = header.Filename
 	}
 
-	body, _ := io.ReadAll(file)
+	// Add menu/ prefix
+	key := "menu/" + filename
+
+	body, err := io.ReadAll(file)
+	if err != nil {
+		c.JSON(500, Response{Success: false, Error: "Failed to read file"})
+		return
+	}
+
+	contentType := header.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "image/jpeg"
+	}
 
 	_, err = h.client.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket:      aws.String(h.bucket),
 		Key:         aws.String(key),
-		Body:        io.NopCloser(io.Reader(file)),
-		ContentType: aws.String(header.Header.Get("Content-Type")),
+		Body:        bytes.NewReader(body),
+		ContentType: aws.String(contentType),
 	})
 
 	if err != nil {
@@ -235,10 +249,11 @@ func (h *S3Handler) renameImage(c *gin.Context) {
 
 	newKey := folder + "/" + newName
 
-	// Copy object
+	// Copy object - CopySource must be URL encoded
+	copySource := url.PathEscape(h.bucket + "/" + oldKey)
 	_, err := h.client.CopyObject(context.TODO(), &s3.CopyObjectInput{
 		Bucket:     aws.String(h.bucket),
-		CopySource: aws.String(h.bucket + "/" + oldKey),
+		CopySource: aws.String(copySource),
 		Key:        aws.String(newKey),
 	})
 
