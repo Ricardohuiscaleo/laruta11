@@ -1,14 +1,3 @@
-# Binaries
-api
-*.exe
-*.dll
-*.so
-*.dylib
-
-# Go
-*.test
-*.out
-
-# Env
 .env
-.env.local
+go.sum
+api

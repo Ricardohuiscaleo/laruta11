@@ -5,7 +5,11 @@ nixPkgs = ["go_1_21"]
 cmds = ["go mod download"]
 
 [phases.build]
-cmds = ["go build -o api main.go"]
+cmds = ["go build -tags netgo -ldflags '-w' -o api main.go"]
 
 [start]
 cmd = "./api"
+
+[variables]
+GOPROXY = "https://proxy.golang.org,direct"
+GOSUMDB = "sum.golang.org"
