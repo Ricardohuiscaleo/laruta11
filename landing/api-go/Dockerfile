@@ -8,7 +8,7 @@ COPY go.mod .
 RUN go mod download
 
 COPY . .
-RUN go build -o api main.go
+RUN GOSUMDB=off go build -o api main.go
 
 EXPOSE 3001
 
