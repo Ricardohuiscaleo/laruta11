@@ -55,3 +55,6 @@ vendor/
 *.backup
 *.bak
 *.old
+
+# Legacy API (no subir - usar api-go)
+landing/api/

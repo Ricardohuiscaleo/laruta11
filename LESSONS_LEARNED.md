@@ -96,6 +96,10 @@ if filename := c.PostForm("custom_name"); filename != "" {
 ```
 
 **Lección**: Siempre preservar extensión de archivo original. `isImageFile()` filtra por extensión.
+
+---
+
+### 7. Go Rename - CopySource URL Encoding
 **Problema**: Rename falla con archivos que tienen espacios o caracteres especiales
 
 **Causa**: `CopySource` en S3 debe estar URL encoded
@@ -111,8 +115,6 @@ CopySource: aws.String(copySource)
 **Lección**: S3 CopySource requiere URL encoding. Usar `url.PathEscape()` no `url.QueryEscape()`.
 
 ---
-
-### 7. Go Rename - CopySource URL Encoding
 
 ## ✅ CHECKLIST DE DEPLOY
 
@@ -146,8 +148,13 @@ CopySource: aws.String(copySource)
 - Bucket: `laruta11-images`
 - Región: `us-east-1`
 - Todos los servicios acceden al mismo bucket
-- PHP usa AWS Signature V2 (manual)
-- Go usa aws-sdk-go-v2 (oficial)
+- ~~PHP usa AWS Signature V2 (manual)~~ **DEPRECADO**
+- Go usa aws-sdk-go-v2 (oficial) ✅
+
+### Legacy Code
+- `/landing/api/` → **NO SUBIR A GIT** (agregado a `.gitignore`)
+- Solo referencia histórica local
+- Usar `/landing/api-go/` en producción
 
 ---
 
