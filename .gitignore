@@ -58,3 +58,6 @@ vendor/
 
 # Legacy API (no subir - usar api-go)
 landing/api/
+
+# Legacy APIs (no subir)
+legacy-apis/
