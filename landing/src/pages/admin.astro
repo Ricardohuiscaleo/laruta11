@@ -455,84 +455,29 @@ import Layout from '../layouts/Layout.astro';
       resultDiv.classList.remove('hidden');
       resultDiv.innerHTML = '<div class="bg-blue-50 border border-blue-200 rounded-xl p-6"><div class="flex items-center mb-4"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div><h3 class="text-lg font-semibold text-blue-800">Probando configuración...</h3></div></div>';
       
+      // Usar la API Go en vez de PHP
       try {
-        const response = await fetch('/api/config-test.php');
-        const data = await response.json();
-        
-        let html = '<div class="bg-white border border-gray-200 rounded-xl p-6"><h3 class="text-xl font-bold text-gray-800 mb-4">📊 Resultados del Test</h3><div class="grid gap-4">';
-        
-        Object.entries(data).forEach(([key, value]) => {
-          const isOk = value === 'OK';
-          const isDefault = (key === 'aws_region' && value === 'us-east-1') || (key === 's3_bucket' && value === 'laruta11-images');
-          const isMissing = value === 'MISSING' || value === '';
-          
-          let icon, colorClass;
-          if (isOk || isDefault) {
-            icon = '✅';
-            colorClass = 'text-green-600 bg-green-50 border-green-200';
-          } else if (isMissing) {
-            icon = '❌';
-            colorClass = 'text-red-600 bg-red-50 border-red-200';
-          } else {
-            icon = '⚠️';
-            colorClass = 'text-yellow-600 bg-yellow-50 border-yellow-200';
-          }
-          
-          const displayValue = isDefault ? `${value} (por defecto)` : value;
-          html += `<div class="flex items-center justify-between p-3 rounded-lg border ${colorClass}"><span class="font-medium">${icon} ${key.replace('_', ' ').toUpperCase()}</span><span class="text-sm">${displayValue}</span></div>`;
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'action=test'
         });
         
-        html += '</div></div>';
-        resultDiv.innerHTML = html;
+        const data = await response.json();
+        
+        if (data.success) {
+          resultDiv.innerHTML = '<div class="bg-green-50 border border-green-200 rounded-xl p-6"><h3 class="text-lg font-semibold text-green-800 mb-2">✅ Configuración OK</h3><p class="text-green-600">API Go funcionando correctamente</p></div>';
+        } else {
+          resultDiv.innerHTML = '<div class="bg-red-50 border border-red-200 rounded-xl p-6"><h3 class="text-lg font-semibold text-red-800 mb-2">❌ Error</h3><p class="text-red-600">' + (data.error || 'Error desconocido') + '</p></div>';
+        }
       } catch (error) {
         resultDiv.innerHTML = '<div class="bg-red-50 border border-red-200 rounded-xl p-6"><h3 class="text-lg font-semibold text-red-800 mb-2">❌ Error en el test</h3><p class="text-red-600">' + error.message + '</p></div>';
       }
     }
     
     async function testAwsDetailed() {
-      const resultDiv = document.getElementById('configTestResult');
-      resultDiv.classList.remove('hidden');
-      resultDiv.innerHTML = '<div class="bg-orange-50 border border-orange-200 rounded-xl p-6"><div class="flex items-center mb-4"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-600 mr-3"></div><h3 class="text-lg font-semibold text-orange-800">Diagnosticando AWS...</h3></div></div>';
-      
-      try {
-        const response = await fetch('/api/simple-test.php');
-        const data = await response.json();
-        
-        let html = '<div class="bg-white border border-gray-200 rounded-xl p-6"><h3 class="text-xl font-bold text-gray-800 mb-4">🔧 Diagnóstico AWS Detallado</h3><div class="grid gap-3">';
-        
-        Object.entries(data).forEach(([key, value]) => {
-          const isOk = value === 'OK' || value.toString().startsWith('OK');
-          const isError = value.toString().startsWith('ERROR');
-          const isDefault = (key === 'aws_region' && value === 'us-east-1') || (key === 's3_bucket' && value === 'laruta11-images');
-          const isConfigPath = key === 'config_path';
-          
-          let icon, colorClass;
-          if (isOk || isDefault) {
-            icon = '✅';
-            colorClass = 'text-green-600 bg-green-50 border-green-200';
-          } else if (isError) {
-            icon = '❌';
-            colorClass = 'text-red-600 bg-red-50 border-red-200';
-          } else {
-            icon = '⚠️';
-            colorClass = 'text-yellow-600 bg-yellow-50 border-yellow-200';
-          }
-          
-          let displayValue = value;
-          if (isDefault) {
-            displayValue = `${value} (por defecto)`;
-          } else if (isConfigPath) {
-            displayValue = `${value} (encontrado)`;
-          }
-          
-          html += `<div class="flex items-center justify-between p-3 rounded-lg border ${colorClass}"><span class="font-medium">${icon} ${key.replace('_', ' ').toUpperCase()}</span><span class="text-sm font-mono">${displayValue}</span></div>`;
-        });
-        
-        html += '</div></div>';
-        resultDiv.innerHTML = html;
-      } catch (error) {
-        resultDiv.innerHTML = '<div class="bg-red-50 border border-red-200 rounded-xl p-6"><h3 class="text-lg font-semibold text-red-800 mb-2">❌ Error en diagnóstico AWS</h3><p class="text-red-600">' + error.message + '</p></div>';
-      }
+      // Redirigir al test S3 ya que no hay PHP
+      testS3Connection();
     }
     
     let allImageUrls = [];
