@@ -84,6 +84,44 @@ func main() {
 	r.GET("/api/get_previous_month_summary.php", s.getPreviousMonthSummary)
 	r.GET("/api/get_financial_reports.php", s.getFinancialReports)
 
+	// MenuApp (22 PHP → 8 Go consolidados)
+	r.GET("/api/menu", s.getMenu)
+	r.GET("/api/get_menu_products.php", s.getMenu) // Alias legacy
+	r.POST("/api/products/:id/like", s.toggleLike)
+	r.POST("/api/toggle_like.php", s.toggleLike) // Alias legacy
+	r.PUT("/api/products/:id/status", s.toggleProductStatus)
+	r.POST("/api/toggle_product_status.php", s.toggleProductStatus) // Alias legacy
+	r.POST("/api/orders", s.createOrderFull)
+	r.POST("/api/create_order.php", s.createOrderFull) // Alias legacy
+	r.GET("/api/orders/user/:user_id", s.getUserOrders)
+	r.GET("/api/get_user_orders.php", s.getUserOrders) // Alias legacy
+	r.GET("/api/notifications", s.getNotifications)
+	r.GET("/api/get_order_notifications.php", s.getNotifications) // Alias legacy
+	r.POST("/api/notifications/admin", s.notifyAdmin)
+	r.POST("/api/notify_admin_payment.php", s.notifyAdmin) // Alias legacy
+	r.GET("/api/trucks", s.getTrucks)
+	r.GET("/api/get_nearby_trucks.php", s.getTrucks) // Alias legacy
+	r.GET("/api/get_truck_status.php", s.getTrucks) // Alias legacy
+	r.GET("/api/get_truck_schedules.php", s.getTrucks) // Alias legacy
+	r.PUT("/api/trucks/:id", s.updateTruck)
+	r.POST("/api/update_truck_status.php", s.updateTruck) // Alias legacy
+	r.POST("/api/update_truck_config.php", s.updateTruck) // Alias legacy
+	r.POST("/api/update_truck_schedule.php", s.updateTruck) // Alias legacy
+	r.POST("/api/location", s.handleLocation)
+	r.POST("/api/location/geocode.php", s.handleLocation) // Alias legacy
+	r.POST("/api/location/save_location.php", s.handleLocation) // Alias legacy
+	r.POST("/api/location/check_delivery_zone.php", s.handleLocation) // Alias legacy
+	r.POST("/api/location/get_nearby_products.php", s.handleLocation) // Alias legacy
+	r.POST("/api/location/calculate_delivery_time.php", s.handleLocation) // Alias legacy
+	r.GET("/api/auth/session", s.checkSession)
+	r.GET("/api/auth/check_session.php", s.checkSession) // Alias legacy
+	r.PUT("/api/users/:id", s.updateUser)
+	r.POST("/api/update_cashier_profile.php", s.updateUser) // Alias legacy
+	r.DELETE("/api/users/:id", s.deleteUser)
+	r.POST("/api/auth/delete_account.php", s.deleteUser) // Alias legacy
+	r.POST("/api/track", s.trackUsage)
+	r.POST("/api/track_usage.php", s.trackUsage) // Alias legacy
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3002"
