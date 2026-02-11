@@ -8,14 +8,11 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:20-alpine
+FROM nginx:alpine
 
-WORKDIR /app
-
-RUN npm install -g serve
-
-COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/dist /app/dist
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 3000
 
-CMD ["serve", "dist", "-l", "3000"]
+CMD ["nginx", "-g", "daemon off;"]
