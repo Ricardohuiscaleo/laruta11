@@ -410,6 +410,60 @@ func (s *Server) getProductByID(c *gin.Context) {
 	c.JSON(200, gin.H{"success": true, "product": map[string]interface{}{"id": id, "name": name, "price": price, "category_id": catID, "is_active": active == 1}})
 }
 
+// POST /api/products
+func (s *Server) saveProduct(c *gin.Context) {
+	var req struct {
+		ID          int     `json:"id"`
+		Name        string  `json:"name"`
+		Description string  `json:"description"`
+		Price       float64 `json:"price"`
+		CategoryID  int     `json:"category_id"`
+		ImageURL    string  `json:"image"`
+		IsActive    *bool   `json:"is_active"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid JSON"})
+		return
+	}
+
+	if req.ID > 0 {
+		// Update
+		_, err := s.DB.Exec("UPDATE products SET name=?, description=?, price=?, category_id=?, image_url=? WHERE id=?",
+			req.Name, req.Description, req.Price, req.CategoryID, req.ImageURL, req.ID)
+		if err != nil {
+			c.JSON(500, gin.H{"success": false, "error": err.Error()})
+			return
+		}
+	} else {
+		// Create
+		// Defaults: cost_price=0, stock=0, min_stock=5, prep_time=10, active=1
+		res, err := s.DB.Exec(`
+			INSERT INTO products (name, description, price, category_id, image_url, 
+				cost_price, stock_quantity, min_stock_level, preparation_time, is_active, created_at)
+			VALUES (?, ?, ?, ?, ?, 0, 0, 5, 10, 1, NOW())`,
+			req.Name, req.Description, req.Price, req.CategoryID, req.ImageURL)
+		if err != nil {
+			c.JSON(500, gin.H{"success": false, "error": err.Error()})
+			return
+		}
+		id, _ := res.LastInsertId()
+		req.ID = int(id)
+	}
+	c.JSON(200, gin.H{"success": true, "id": req.ID})
+}
+
+// DELETE /api/products/:id
+func (s *Server) deleteProduct(c *gin.Context) {
+	id := c.Param("id")
+	// Soft delete
+	_, err := s.DB.Exec("UPDATE products SET is_active = 0 WHERE id = ?", id)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"success": true})
+}
+
 // GET /api/orders/pending
 func (s *Server) getPendingOrders(c *gin.Context) {
 	rows, err := s.DB.Query(`SELECT id, order_number, customer_data, items_data, total_amount, order_status FROM tuu_orders WHERE order_status IN ('pending', 'preparing') ORDER BY created_at DESC`)
@@ -600,4 +654,12 @@ func (s *Server) queryAnalytics() gin.H {
 		"users":    gin.H{"total": totalUsers, "new_today": newUsers},
 		"products": gin.H{"total": totalProducts},
 	}
+}
+
+
+// getDashboard - Endpoint consolidado: 8 requests → 1 request
+	}
+	
+	wg.Wait()
+	c.JSON(200, gin.H{"success": true, "data": results})
 }

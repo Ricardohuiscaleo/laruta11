@@ -17,7 +17,7 @@
         import { createElement as h, useState, useEffect } from 'https://esm.sh/react@18';
         import { createRoot } from 'https://esm.sh/react-dom@18/client';
 
-        const GO_API = 'https://websites-api-go-caja-r11.dj3bvg.easypanel.host';
+        const GO_API = window.location.hostname === 'localhost' ? 'http://localhost:3002' : 'https://websites-api-go-caja-r11.dj3bvg.easypanel.host';
 
         // Componente principal
         function InventarioApp() {

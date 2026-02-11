@@ -71,7 +71,7 @@ func main() {
 	r.GET("/api/orders/pending", s.getPendingOrders)
 	r.POST("/api/orders/status", s.updateOrderStatus)
 
-	// Dashboard (consolidado - 1 endpoint reemplaza 3 PHP)
+	// Dashboard (consolidado - 8 endpoints PHP → 1 endpoint Go con goroutines)
 	r.GET("/api/dashboard", s.getDashboard)
 
 	port := os.Getenv("PORT")
