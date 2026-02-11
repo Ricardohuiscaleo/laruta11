@@ -3,7 +3,9 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -440,4 +442,162 @@ func (s *Server) updateOrderStatus(c *gin.Context) {
 		s.DB.Exec("UPDATE tuu_orders SET payment_status = ? WHERE id = ?", req["payment_status"], req["order_id"])
 	}
 	c.JSON(200, gin.H{"success": true})
+}
+
+// ========== DASHBOARD (consolidado - reemplaza 3 PHP endpoints) ==========
+
+// GET /api/dashboard?date=YYYY-MM-DD
+func (s *Server) getDashboard(c *gin.Context) {
+	date := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
+
+	var wg sync.WaitGroup
+	var salesData, behaviorData, analyticsData gin.H
+
+	wg.Add(3)
+	go func() { defer wg.Done(); salesData = s.queryTUUSales(date) }()
+	go func() { defer wg.Done(); behaviorData = s.queryUserBehavior() }()
+	go func() { defer wg.Done(); analyticsData = s.queryAnalytics() }()
+	wg.Wait()
+
+	c.JSON(200, gin.H{
+		"success":   true,
+		"sales":     salesData,
+		"behavior":  behaviorData,
+		"analytics": analyticsData,
+	})
+}
+
+func (s *Server) queryTUUSales(date string) gin.H {
+	type Tx struct {
+		ID            int64   `json:"id"`
+		OrderRef      string  `json:"order_reference"`
+		Amount        float64 `json:"amount"`
+		CustomerName  string  `json:"customer_name"`
+		ProductName   string  `json:"product_name"`
+		CreatedAt     string  `json:"created_at"`
+		PaymentMethod string  `json:"payment_method"`
+		DeliveryFee   float64 `json:"delivery_fee"`
+		OrderCost     float64 `json:"order_cost"`
+	}
+
+	rows, err := s.DB.Query(`
+		SELECT o.id, COALESCE(o.order_number,''), 
+			COALESCE(o.tuu_amount, o.installment_amount, o.product_price, 0),
+			COALESCE(o.customer_name,''), COALESCE(o.product_name,''),
+			o.created_at, COALESCE(o.payment_method,'cash'),
+			COALESCE(o.delivery_fee,0),
+			COALESCE((SELECT SUM(item_cost*quantity) FROM tuu_order_items WHERE order_reference=o.order_number),0)
+		FROM tuu_orders o
+		WHERE DATE(o.created_at) >= ? AND DATE(o.created_at) <= ? AND o.payment_status='paid'
+		ORDER BY o.created_at DESC`, date, date)
+	if err != nil {
+		return gin.H{"all_transactions": []any{}, "combined_stats": gin.H{}}
+	}
+	defer rows.Close()
+
+	var txs []Tx
+	loc, _ := time.LoadLocation("America/Santiago")
+	for rows.Next() {
+		var t Tx
+		var ca time.Time
+		if rows.Scan(&t.ID, &t.OrderRef, &t.Amount, &t.CustomerName, &t.ProductName, &ca, &t.PaymentMethod, &t.DeliveryFee, &t.OrderCost) != nil {
+			continue
+		}
+		chile := ca.In(loc)
+		if chile.Hour() < 4 {
+			chile = chile.AddDate(0, 0, -1)
+		}
+		t.CreatedAt = chile.Format("2006-01-02 15:04:05")
+		txs = append(txs, t)
+	}
+	if txs == nil {
+		txs = []Tx{}
+	}
+
+	byMethod := map[string]gin.H{}
+	var totalRev, totalDel float64
+	for _, t := range txs {
+		totalRev += t.Amount
+		totalDel += t.DeliveryFee
+		if _, ok := byMethod[t.PaymentMethod]; !ok {
+			byMethod[t.PaymentMethod] = gin.H{"sales": 0.0, "orders": 0}
+		}
+		byMethod[t.PaymentMethod]["sales"] = byMethod[t.PaymentMethod]["sales"].(float64) + t.Amount
+		byMethod[t.PaymentMethod]["orders"] = byMethod[t.PaymentMethod]["orders"].(int) + 1
+	}
+
+	return gin.H{
+		"all_transactions": txs,
+		"combined_stats": gin.H{
+			"total_revenue": totalRev, "total_transactions": len(txs),
+			"total_delivery_fee": totalDel, "by_method": byMethod,
+		},
+	}
+}
+
+func (s *Server) queryUserBehavior() gin.H {
+	result := gin.H{"top_products": []any{}, "interactions_today": []any{}, "engagement": gin.H{"avg_time": 0.0, "avg_scroll": 0.0}}
+
+	type P struct {
+		Name   string `json:"product_name"`
+		Views  int    `json:"views_count"`
+		Clicks int    `json:"clicks_count"`
+	}
+	if rows, err := s.DB.Query(`SELECT product_name, views_count, clicks_count FROM product_analytics ORDER BY views_count DESC LIMIT 5`); err == nil {
+		defer rows.Close()
+		var ps []P
+		for rows.Next() {
+			var p P
+			rows.Scan(&p.Name, &p.Views, &p.Clicks)
+			ps = append(ps, p)
+		}
+		if ps != nil {
+			result["top_products"] = ps
+		}
+	}
+
+	type I struct {
+		Type  string `json:"action_type"`
+		Count int    `json:"count"`
+	}
+	if rows, err := s.DB.Query(`SELECT action_type, COUNT(*) FROM user_interactions WHERE DATE(timestamp)=CURDATE() GROUP BY action_type`); err == nil {
+		defer rows.Close()
+		var is []I
+		for rows.Next() {
+			var i I
+			rows.Scan(&i.Type, &i.Count)
+			is = append(is, i)
+		}
+		if is != nil {
+			result["interactions_today"] = is
+		}
+	}
+
+	var avgT, avgS sql.NullFloat64
+	s.DB.QueryRow(`SELECT AVG(time_spent), AVG(scroll_depth) FROM user_journey WHERE DATE(timestamp)=CURDATE() AND time_spent>0`).Scan(&avgT, &avgS)
+	result["engagement"] = gin.H{"avg_time": avgT.Float64, "avg_scroll": avgS.Float64}
+
+	return result
+}
+
+func (s *Server) queryAnalytics() gin.H {
+	today := time.Now().Format("2006-01-02")
+	weekAgo := time.Now().AddDate(0, 0, -7).Format("2006-01-02")
+	monthAgo := time.Now().AddDate(0, 0, -30).Format("2006-01-02")
+
+	var vToday, vWeek, vMonth, totalUsers, newUsers, totalProducts int
+	s.DB.QueryRow(`SELECT COUNT(DISTINCT ip_address) FROM site_visits WHERE visit_date=?`, today).Scan(&vToday)
+	s.DB.QueryRow(`SELECT COUNT(DISTINCT ip_address) FROM site_visits WHERE visit_date>=?`, weekAgo).Scan(&vWeek)
+	s.DB.QueryRow(`SELECT COUNT(DISTINCT ip_address) FROM site_visits WHERE visit_date>=?`, monthAgo).Scan(&vMonth)
+	s.DB.QueryRow(`SELECT COUNT(*) FROM app_users`).Scan(&totalUsers)
+	if s.DB.QueryRow(fmt.Sprintf(`SELECT COUNT(*) FROM app_users WHERE DATE(created_at)='%s'`, today)).Scan(&newUsers) != nil {
+		s.DB.QueryRow(fmt.Sprintf(`SELECT COUNT(*) FROM app_users WHERE DATE(registration_date)='%s'`, today)).Scan(&newUsers)
+	}
+	s.DB.QueryRow(`SELECT COUNT(*) FROM products`).Scan(&totalProducts)
+
+	return gin.H{
+		"visitors": gin.H{"today": vToday, "week": vWeek, "month": vMonth},
+		"users":    gin.H{"total": totalUsers, "new_today": newUsers},
+		"products": gin.H{"total": totalProducts},
+	}
 }

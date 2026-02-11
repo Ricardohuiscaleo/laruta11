@@ -71,6 +71,9 @@ func main() {
 	r.GET("/api/orders/pending", s.getPendingOrders)
 	r.POST("/api/orders/status", s.updateOrderStatus)
 
+	// Dashboard (consolidado - 1 endpoint reemplaza 3 PHP)
+	r.GET("/api/dashboard", s.getDashboard)
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3002"

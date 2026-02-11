@@ -177,113 +177,102 @@
   </div>
   
   <script>
+    const GO_API = 'https://websites-api-go-caja-r11.dj3bvg.easypanel.host';
+    
     // Verificar auth con localStorage
     const adminSession = localStorage.getItem('admin_session');
     if (!adminSession) {
       window.location.href = '/admin/login';
     }
     
-    // Cargar datos de TUU
-    async function loadTUUData() {
+    // Cargar TODOS los datos del dashboard en 1 sola llamada Go
+    async function loadDashboard() {
       try {
         const today = new Date().toISOString().split('T')[0];
-        const response = await fetch(`/api/tuu/get_from_mysql.php?start_date=${today}&end_date=${today}&t=${Date.now()}`);
+        const response = await fetch(`${GO_API}/api/dashboard?date=${today}`);
         const data = await response.json();
         
-        if (data.success && data.data) {
-          const transactions = data.data.all_transactions || [];
-          let totalSales = 0, totalCost = 0;
-          const paymentMethods = {
-            'card': { icon: '💳', label: 'Tarjetas', sales: 0, cost: 0, orders: 0 },
-            'transfer': { icon: '🏦', label: 'Transfer', sales: 0, cost: 0, orders: 0 },
-            'cash': { icon: '💵', label: 'Efectivo', sales: 0, cost: 0, orders: 0 },
-            'webpay': { icon: '💳', label: 'Webpay', sales: 0, cost: 0, orders: 0 },
-            'pedidosya': { icon: '🛵', label: 'PedidosYA', sales: 0, cost: 0, orders: 0 }
-          };
-          let totalDeliveryFee = 0;
-          
-          transactions.forEach(t => {
-            const amount = parseFloat(t.amount || 0);
-            const cost = amount * 0.35;
-            const method = t.payment_method || 'cash';
-            totalSales += amount;
-            totalCost += cost;
-            totalDeliveryFee += parseFloat(t.delivery_fee || 0);
-            if (paymentMethods[method]) {
-              paymentMethods[method].sales += amount;
-              paymentMethods[method].cost += cost;
-              paymentMethods[method].orders += 1;
-            }
-          });
-          
-          const salesEl = document.getElementById('sales');
-          const costsEl = document.getElementById('costs');
-          const profitEl = document.getElementById('profit');
-          const ordersEl = document.getElementById('orders');
-          
-          if (salesEl) salesEl.textContent = '$' + new Intl.NumberFormat('es-CL').format(totalSales);
-          if (costsEl) costsEl.textContent = '$' + new Intl.NumberFormat('es-CL').format(totalCost);
-          if (profitEl) profitEl.textContent = '$' + new Intl.NumberFormat('es-CL').format(totalSales - totalCost);
-          if (ordersEl) ordersEl.textContent = transactions.length.toString();
-          
-          const grid = document.getElementById('payment-methods-grid');
-          if (grid) {
-            grid.innerHTML = Object.entries(paymentMethods).map(([k, d]) => {
-              const profit = d.sales - d.cost;
-              const profitPercent = d.sales > 0 ? ((profit / d.sales) * 100).toFixed(1) : 0;
-              return `<div class="metric-card" style="border-left: 4px solid ${d.sales > 0 ? '#10b981' : '#e5e5e5'}; text-align: left;"><div style="font-size: 1.75rem; font-weight: 700; color: #059669; margin-bottom: 0.5rem;">${d.icon} $${new Intl.NumberFormat('es-CL').format(d.sales)}</div><div style="font-size: 0.9rem; color: #666; margin-bottom: 0.75rem; font-weight: 600;">${d.label}</div><div style="font-size: 0.8rem; color: #999; margin-bottom: 0.25rem;">📦 Costo: $${new Intl.NumberFormat('es-CL').format(d.cost)}</div><div style="font-size: 0.8rem; color: #0284c7; margin-bottom: 0.25rem;">📈 Utilidad: $${new Intl.NumberFormat('es-CL').format(profit)} (${profitPercent}%)</div><div style="font-size: 0.8rem; color: #666;">${d.orders} pedidos</div></div>`;
-            }).join('');
-            if (totalDeliveryFee > 0) {
-              grid.innerHTML += `<div class="metric-card" style="border-left: 4px solid #f59e0b; text-align: left;"><div style="font-size: 1.75rem; font-weight: 700; color: #f59e0b; margin-bottom: 0.5rem;">🏍️ $${new Intl.NumberFormat('es-CL').format(totalDeliveryFee)}</div><div style="font-size: 0.9rem; color: #666; font-weight: 600;">Delivery (Rider)</div></div>`;
-            }
+        if (!data.success) return;
+        
+        // === VENTAS (sales) ===
+        const transactions = data.sales?.all_transactions || [];
+        let totalSales = 0, totalCost = 0;
+        const paymentMethods = {
+          'card': { icon: '💳', label: 'Tarjetas', sales: 0, cost: 0, orders: 0 },
+          'transfer': { icon: '🏦', label: 'Transfer', sales: 0, cost: 0, orders: 0 },
+          'cash': { icon: '💵', label: 'Efectivo', sales: 0, cost: 0, orders: 0 },
+          'webpay': { icon: '💳', label: 'Webpay', sales: 0, cost: 0, orders: 0 },
+          'pedidosya': { icon: '🛵', label: 'PedidosYA', sales: 0, cost: 0, orders: 0 }
+        };
+        let totalDeliveryFee = 0;
+        
+        transactions.forEach(t => {
+          const amount = parseFloat(t.amount || 0);
+          const cost = amount * 0.35;
+          const method = t.payment_method || 'cash';
+          totalSales += amount;
+          totalCost += cost;
+          totalDeliveryFee += parseFloat(t.delivery_fee || 0);
+          if (paymentMethods[method]) {
+            paymentMethods[method].sales += amount;
+            paymentMethods[method].cost += cost;
+            paymentMethods[method].orders += 1;
+          }
+        });
+        
+        const salesEl = document.getElementById('sales');
+        const costsEl = document.getElementById('costs');
+        const profitEl = document.getElementById('profit');
+        const ordersEl = document.getElementById('orders');
+        
+        if (salesEl) salesEl.textContent = '$' + new Intl.NumberFormat('es-CL').format(totalSales);
+        if (costsEl) costsEl.textContent = '$' + new Intl.NumberFormat('es-CL').format(totalCost);
+        if (profitEl) profitEl.textContent = '$' + new Intl.NumberFormat('es-CL').format(totalSales - totalCost);
+        if (ordersEl) ordersEl.textContent = transactions.length.toString();
+        
+        const grid = document.getElementById('payment-methods-grid');
+        if (grid) {
+          grid.innerHTML = Object.entries(paymentMethods).map(([k, d]) => {
+            const profit = d.sales - d.cost;
+            const profitPercent = d.sales > 0 ? ((profit / d.sales) * 100).toFixed(1) : 0;
+            return `<div class="metric-card" style="border-left: 4px solid ${d.sales > 0 ? '#10b981' : '#e5e5e5'}; text-align: left;"><div style="font-size: 1.75rem; font-weight: 700; color: #059669; margin-bottom: 0.5rem;">${d.icon} $${new Intl.NumberFormat('es-CL').format(d.sales)}</div><div style="font-size: 0.9rem; color: #666; margin-bottom: 0.75rem; font-weight: 600;">${d.label}</div><div style="font-size: 0.8rem; color: #999; margin-bottom: 0.25rem;">📦 Costo: $${new Intl.NumberFormat('es-CL').format(d.cost)}</div><div style="font-size: 0.8rem; color: #0284c7; margin-bottom: 0.25rem;">📈 Utilidad: $${new Intl.NumberFormat('es-CL').format(profit)} (${profitPercent}%)</div><div style="font-size: 0.8rem; color: #666;">${d.orders} pedidos</div></div>`;
+          }).join('');
+          if (totalDeliveryFee > 0) {
+            grid.innerHTML += `<div class="metric-card" style="border-left: 4px solid #f59e0b; text-align: left;"><div style="font-size: 1.75rem; font-weight: 700; color: #f59e0b; margin-bottom: 0.5rem;">🏍️ $${new Intl.NumberFormat('es-CL').format(totalDeliveryFee)}</div><div style="font-size: 0.9rem; color: #666; font-weight: 600;">Delivery (Rider)</div></div>`;
           }
         }
+        
+        // === COMPORTAMIENTO (behavior) ===
+        const behavior = data.behavior || {};
+        const totalInteractions = (behavior.interactions_today || []).reduce((sum, item) => sum + parseInt(item.count), 0);
+        const interactionsEl = document.getElementById('interactions');
+        if (interactionsEl) interactionsEl.textContent = totalInteractions;
+        
+        const avgTime = behavior.engagement?.avg_time ? Math.round(behavior.engagement.avg_time) : 0;
+        const avgTimeEl = document.getElementById('avg-time');
+        if (avgTimeEl) avgTimeEl.textContent = avgTime + 's';
+        
+        const topProduct = (behavior.top_products || [])[0];
+        const topProductEl = document.getElementById('top-product');
+        if (topProduct && topProductEl) {
+          const productName = topProduct.product_name.length > 15 
+            ? topProduct.product_name.substring(0, 15) + '...' 
+            : topProduct.product_name;
+          topProductEl.textContent = productName;
+        }
+        
+        // === ANALYTICS (analytics) ===
+        const analytics = data.analytics || {};
+        const pendingEl = document.getElementById('pending');
+        if (pendingEl) pendingEl.textContent = analytics.visitors?.today || 0;
+        
       } catch (error) {
-        console.error('Error:', error);
+        console.error('Error cargando dashboard:', error);
       }
     }
     
-    loadTUUData();
-    setInterval(loadTUUData, 30000);
-    
-    // Cargar métricas de comportamiento
-    fetch('/api/app/get_user_behavior.php')
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          // Total interacciones
-          const totalInteractions = data.data.interactions_today.reduce((sum, item) => sum + parseInt(item.count), 0);
-          const interactionsEl = document.getElementById('interactions');
-          if (interactionsEl) interactionsEl.textContent = totalInteractions;
-          
-          // Tiempo promedio
-          const avgTime = data.data.engagement?.avg_time ? Math.round(data.data.engagement.avg_time) : 0;
-          const avgTimeEl = document.getElementById('avg-time');
-          if (avgTimeEl) avgTimeEl.textContent = avgTime + 's';
-          
-          // Producto más popular
-          const topProduct = data.data.top_products[0];
-          const topProductEl = document.getElementById('top-product');
-          if (topProduct && topProductEl) {
-            const productName = topProduct.product_name.length > 15 
-              ? topProduct.product_name.substring(0, 15) + '...' 
-              : topProduct.product_name;
-            topProductEl.textContent = productName;
-          }
-        }
-      })
-      .catch(console.error);
-    
-    // Cargar métricas de visitas
-    fetch('/api/app/get_analytics.php')
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          const pendingEl = document.getElementById('pending');
-          if (pendingEl) pendingEl.textContent = data.data.visitors.today;
-        }
-      })
-      .catch(console.error);
+    loadDashboard();
+    setInterval(loadDashboard, 30000);
   </script>
 </body>
 </html>
