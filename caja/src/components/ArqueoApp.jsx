@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { CreditCard, Building2, Banknote, Smartphone, Bike, TrendingUp, Pencil, ChevronLeft, ChevronRight, BarChart3, MessageCircle, ArrowLeft, Clock, Wallet, Moon, Calendar, BadgeDollarSign } from 'lucide-react';
+import { API_CONFIG } from '../config/api';
 
 export default function ArqueoApp() {
   const [salesData, setSalesData] = useState(null);
@@ -39,8 +40,7 @@ export default function ArqueoApp() {
   const loadSalesData = async (daysAgo = 0) => {
     if (salesData) setIsTransitioning(true);
     try {
-      const apiUrl = 'https://api-go-caja-r11.laruta11.cl';
-      const url = daysAgo > 0 ? `${apiUrl}/api/sales/summary?days_ago=${daysAgo}&v=${Date.now()}` : `${apiUrl}/api/sales/summary?v=${Date.now()}`;
+      const url = daysAgo > 0 ? `${API_CONFIG.BASE_URL}/api/sales/summary?days_ago=${daysAgo}&v=${Date.now()}` : `${API_CONFIG.BASE_URL}/api/sales/summary?v=${Date.now()}`;
       const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
       const data = await response.json();
       if (data.success) {
@@ -57,7 +57,7 @@ export default function ArqueoApp() {
 
   const loadSaldoCaja = async () => {
     try {
-      const response = await fetch('https://api-go-caja-r11.laruta11.cl/api/caja/saldo');
+      const response = await fetch(`${API_CONFIG.BASE_URL}/api/caja/saldo`);
       const data = await response.json();
       if (data.success) {
         setSaldoCaja(data.saldo_actual);
