@@ -168,20 +168,30 @@ func (s *Server) getUserOrders(c *gin.Context) {
 
 func (s *Server) getNotifications(c *gin.Context) {
 	if s.DB == nil {
-		c.JSON(200, gin.H{"success": true, "notifications": []interface{}{}})
+		c.JSON(200, gin.H{"success": true, "notifications": []interface{}{}, "unread_count": 0})
 		return
 	}
 	userID := c.DefaultQuery("user_id", "0")
-	rows, _ := s.DB.Query(`SELECT id, title, message, type, is_read, created_at FROM notifications WHERE user_id = ? OR user_id IS NULL ORDER BY created_at DESC LIMIT 20`, userID)
+	rows, err := s.DB.Query(`SELECT id, titulo, mensaje, tipo, leida, created_at FROM notifications WHERE user_id = ? OR user_id IS NULL ORDER BY created_at DESC LIMIT 20`, userID)
+	if err != nil {
+		c.JSON(200, gin.H{"success": true, "notifications": []interface{}{}, "unread_count": 0})
+		return
+	}
 	defer rows.Close()
 	notifs := []map[string]interface{}{}
+	unreadCount := 0
 	for rows.Next() {
 		var id, isRead int
 		var title, msg, typ, createdAt string
-		rows.Scan(&id, &title, &msg, &typ, &isRead, &createdAt)
-		notifs = append(notifs, map[string]interface{}{"id": id, "titulo": title, "mensaje": msg, "type": typ, "leida": isRead == 1, "created_at": createdAt})
+		if err := rows.Scan(&id, &title, &msg, &typ, &isRead, &createdAt); err != nil {
+			continue
+		}
+		if isRead == 0 {
+			unreadCount++
+		}
+		notifs = append(notifs, map[string]interface{}{"id": id, "titulo": title, "mensaje": msg, "tipo": typ, "leida": isRead == 1, "created_at": createdAt})
 	}
-	c.JSON(200, gin.H{"success": true, "notifications": notifs})
+	c.JSON(200, gin.H{"success": true, "notifications": notifs, "unread_count": unreadCount})
 }
 
 func (s *Server) notifyAdmin(c *gin.Context) {
@@ -196,15 +206,25 @@ func (s *Server) getTrucks(c *gin.Context) {
 		c.JSON(200, gin.H{"success": true, "trucks": []interface{}{}})
 		return
 	}
-	rows, _ := s.DB.Query(`SELECT id, name, latitude, longitude, is_active, tarifa_delivery FROM food_trucks ORDER BY name`)
+	rows, err := s.DB.Query(`SELECT id, nombre, latitud, longitud, activo, tarifa_delivery, direccion, horario_inicio, horario_fin FROM food_trucks ORDER BY nombre`)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
 	defer rows.Close()
 	trucks := []map[string]interface{}{}
 	for rows.Next() {
 		var id, active, tarifa int
-		var name string
+		var nombre, direccion, horarioInicio, horarioFin string
 		var lat, lng float64
-		rows.Scan(&id, &name, &lat, &lng, &active, &tarifa)
-		trucks = append(trucks, map[string]interface{}{"id": id, "name": name, "latitude": lat, "longitude": lng, "is_active": active == 1, "tarifa_delivery": tarifa})
+		if err := rows.Scan(&id, &nombre, &lat, &lng, &active, &tarifa, &direccion, &horarioInicio, &horarioFin); err != nil {
+			continue
+		}
+		trucks = append(trucks, map[string]interface{}{
+			"id": id, "nombre": nombre, "latitud": lat, "longitud": lng,
+			"activo": active, "tarifa_delivery": tarifa, "direccion": direccion,
+			"horario_inicio": horarioInicio, "horario_fin": horarioFin,
+		})
 	}
 	c.JSON(200, gin.H{"success": true, "trucks": trucks})
 }

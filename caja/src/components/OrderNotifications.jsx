@@ -42,7 +42,7 @@ export default function OrderNotifications({ userId, audioEnabled, onNotificatio
 
     const checkNotifications = async () => {
       try {
-        const response = await fetch(`/api/get_order_notifications.php?user_id=${userId}&t=${Date.now()}`, {
+        const response = await fetch(`/api/notifications?user_id=${userId}&t=${Date.now()}`, {
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
