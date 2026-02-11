@@ -21,7 +21,7 @@ func (s *Server) getComandas(c *gin.Context) {
 	
 	query := `
 		SELECT o.id, o.order_number, o.customer_name, o.customer_phone,
-			o.items_data, o.installment_amount, o.order_status, o.payment_status,
+			o.customer_data, o.installment_amount, o.order_status, o.payment_status,
 			o.payment_method, o.delivery_type, o.created_at
 		FROM tuu_orders o
 		WHERE DATE(o.created_at) = ?`
@@ -45,18 +45,21 @@ func (s *Server) getComandas(c *gin.Context) {
 	comandas := []map[string]interface{}{}
 	for rows.Next() {
 		var id int
-		var orderNum, customerName, customerPhone, itemsData, orderStatus, paymentStatus, paymentMethod, deliveryType, createdAt string
+		var orderNum, customerName, customerPhone, customerData, orderStatus, paymentStatus, paymentMethod, deliveryType, createdAt string
 		var amount float64
 		
-		if err := rows.Scan(&id, &orderNum, &customerName, &customerPhone, &itemsData, &amount, &orderStatus, &paymentStatus, &paymentMethod, &deliveryType, &createdAt); err != nil {
+		if err := rows.Scan(&id, &orderNum, &customerName, &customerPhone, &customerData, &amount, &orderStatus, &paymentStatus, &paymentMethod, &deliveryType, &createdAt); err != nil {
 			c.JSON(500, gin.H{"success": false, "error": "Row scan failed: " + err.Error()})
 			return
 		}
 		
 		var items []interface{}
-		if itemsData != "" && itemsData != "null" {
-			if err := json.Unmarshal([]byte(itemsData), &items); err != nil {
-				items = []interface{}{}
+		if customerData != "" && customerData != "null" {
+			var data map[string]interface{}
+			if err := json.Unmarshal([]byte(customerData), &data); err == nil {
+				if cart, ok := data["cart_items"].([]interface{}); ok {
+					items = cart
+				}
 			}
 		}
 		
