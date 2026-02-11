@@ -6,7 +6,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN go mod tidy && go build -o api .
+RUN go build -o api .
 
 EXPOSE 3002
 
