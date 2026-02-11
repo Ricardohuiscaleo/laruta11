@@ -25,7 +25,8 @@ func (s *Server) getMenu(c *gin.Context) {
 		LEFT JOIN subcategories s ON p.subcategory_id = s.id
 		LEFT JOIN reviews r ON p.id = r.product_id AND r.is_approved = 1
 		WHERE p.is_active = 1
-		GROUP BY p.id
+		GROUP BY p.id, p.name, p.description, p.price, p.image_url, p.stock_quantity, 
+			p.is_active, p.likes, p.views, p.category_id, p.subcategory_id, p.grams, s.name
 		ORDER BY p.category_id, p.subcategory_id, p.name
 	`)
 	
