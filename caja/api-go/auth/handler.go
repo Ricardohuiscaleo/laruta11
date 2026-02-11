@@ -30,6 +30,25 @@ func (h *Handler) Login(c *gin.Context) {
 			valid, role = true, "comandas"
 		}
 	case "admin":
+		// Debug: Log environment variables (sin mostrar contraseñas completas)
+		adminPass := os.Getenv("ADMIN_PASSWORD_ADMIN")
+		ricardoPass := os.Getenv("ADMIN_PASSWORD_RICARDO")
+		
+		// Log para debugging (solo primeros 3 caracteres de la contraseña)
+		if len(adminPass) > 0 {
+			println("DEBUG: ADMIN_PASSWORD_ADMIN está configurada (primeros 3 chars):", adminPass[:3])
+		} else {
+			println("DEBUG: ADMIN_PASSWORD_ADMIN NO está configurada")
+		}
+		
+		if len(ricardoPass) > 0 {
+			println("DEBUG: ADMIN_PASSWORD_RICARDO está configurada (primeros 3 chars):", ricardoPass[:3])
+		} else {
+			println("DEBUG: ADMIN_PASSWORD_RICARDO NO está configurada")
+		}
+		
+		println("DEBUG: Usuario recibido:", req.User, "| Contraseña recibida (primeros 3 chars):", req.Pass[:3])
+		
 		if (req.User == "admin" && req.Pass == os.Getenv("ADMIN_PASSWORD_ADMIN")) || (req.User == "ricardo" && req.Pass == os.Getenv("ADMIN_PASSWORD_RICARDO")) || (req.User == "manager" && req.Pass == os.Getenv("ADMIN_PASSWORD_MANAGER")) || (req.User == "ruta11" && req.Pass == os.Getenv("ADMIN_PASSWORD_RUTA11")) {
 			valid, role = true, "admin"
 		}
