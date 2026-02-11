@@ -320,36 +320,72 @@ func (s *Server) deleteCategory(c *gin.Context) {
 // GET /api/checklist (4 usos)
 func (s *Server) getChecklists(c *gin.Context) {
 	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
-	date := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
-	rows, err := s.DB.Query(`SELECT id, date, type, items, completed FROM checklists WHERE date = ? ORDER BY type`, date)
-	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+	action := c.DefaultQuery("action", "get_active")
+	typ := c.DefaultQuery("type", "apertura")
+	
+	if action == "get_active" {
+		loc, _ := time.LoadLocation("America/Santiago")
+		current := time.Now().In(loc)
+		currentHour := current.Hour()
+		date := current.Format("2006-01-02")
+		
+		if typ == "cierre" {
+			if currentHour < 6 {
+				date = current.Format("2006-01-02")
+			} else {
+				date = current.AddDate(0, 0, 1).Format("2006-01-02")
+			}
+		}
+		
+		var id, totalItems, completedItems int
+		var status, scheduledTime, scheduledDate string
+		err := s.DB.QueryRow(`SELECT id, type, scheduled_date, scheduled_time, total_items, completed_items, status FROM checklists WHERE type = ? AND scheduled_date = ? ORDER BY id DESC LIMIT 1`, typ, date).Scan(&id, &typ, &scheduledDate, &scheduledTime, &totalItems, &completedItems, &status)
+		
+		if err == sql.ErrNoRows {
+			c.JSON(200, gin.H{"success": false, "error": "No hay checklist disponible"})
+			return
+		}
+		
+		rows, _ := s.DB.Query(`SELECT id, item_order, description, requires_photo, is_completed, notes, photo_url FROM checklist_items WHERE checklist_id = ? ORDER BY item_order`, id)
+		defer rows.Close()
+		
+		items := []map[string]interface{}{}
+		for rows.Next() {
+			var itemID, order, reqPhoto, completed int
+			var desc, notes, photo sql.NullString
+			rows.Scan(&itemID, &order, &desc, &reqPhoto, &completed, &notes, &photo)
+			items = append(items, map[string]interface{}{"id": itemID, "item_order": order, "description": desc.String, "requires_photo": reqPhoto == 1, "is_completed": completed == 1, "notes": notes.String, "photo_url": photo.String})
+		}
+		
+		c.JSON(200, gin.H{"success": true, "checklist": gin.H{"id": id, "type": typ, "scheduled_date": scheduledDate, "scheduled_time": scheduledTime, "total_items": totalItems, "completed_items": completedItems, "status": status, "items": items}})
 		return
 	}
-	defer rows.Close()
-
-	chs := []map[string]interface{}{}
-	for rows.Next() {
-		var id, comp int
-		var date, typ, items string
-		rows.Scan(&id, &date, &typ, &items, &comp)
-		chs = append(chs, map[string]interface{}{"id": id, "date": date, "type": typ, "items": json.RawMessage(items), "completed": comp == 1})
-	}
-	c.JSON(200, gin.H{"success": true, "checklists": chs})
+	
+	c.JSON(200, gin.H{"success": false, "error": "Action not implemented"})
 }
 
 // POST /api/checklist
 func (s *Server) saveChecklist(c *gin.Context) {
 	var req map[string]interface{}
 	c.BindJSON(&req)
-
-	if req["id"] != nil && req["id"].(float64) > 0 {
-		s.DB.Exec(`UPDATE checklists SET items = ?, completed = ? WHERE id = ?`, req["items"], req["completed"], int(req["id"].(float64)))
-	} else {
-		s.DB.Exec(`INSERT INTO checklists (date, type, items, completed) VALUES (?, ?, ?, ?)`,
-			req["date"], req["type"], req["items"], req["completed"])
+	action := req["action"]
+	
+	if action == "update_item" {
+		itemID := int(req["item_id"].(float64))
+		isCompleted := req["is_completed"].(bool)
+		notes := req["notes"]
+		
+		completedAt := sql.NullString{}
+		if isCompleted {
+			completedAt = sql.NullString{String: time.Now().Format("2006-01-02 15:04:05"), Valid: true}
+		}
+		
+		s.DB.Exec(`UPDATE checklist_items SET is_completed = ?, completed_at = ?, notes = ? WHERE id = ?`, isCompleted, completedAt, notes, itemID)
+		c.JSON(200, gin.H{"success": true})
+		return
 	}
-	c.JSON(200, gin.H{"success": true})
+	
+	c.JSON(200, gin.H{"success": false, "error": "Action not implemented"})
 }
 
 // DELETE /api/checklist/:id
