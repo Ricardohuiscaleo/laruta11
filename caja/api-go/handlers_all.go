@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -618,30 +619,112 @@ func (s *Server) getDashboardAnalytics(c *gin.Context) {
 
 // GET /api/get_dashboard_cards.php
 func (s *Server) getDashboardCards(c *gin.Context) {
-	var ordersToday, ordersMonth int
-	var revenueToday, revenueMonth float64
-	today := time.Now().Format("2006-01-02")
-	s.DB.QueryRow(`SELECT COUNT(*), COALESCE(SUM(installment_amount),0) FROM tuu_orders WHERE DATE(created_at)=? AND payment_status='paid'`, today).Scan(&ordersToday, &revenueToday)
-	s.DB.QueryRow(`SELECT COUNT(*), COALESCE(SUM(installment_amount),0) FROM tuu_orders WHERE MONTH(created_at)=MONTH(NOW()) AND payment_status='paid'`).Scan(&ordersMonth, &revenueMonth)
+	// Calcular rango del mes con lógica de turnos
+	loc, _ := time.LoadLocation("America/Santiago")
+	now := time.Now().In(loc)
+	currentHour := now.Hour()
+	
+	shiftToday := now
+	if currentHour >= 0 && currentHour < 4 {
+		shiftToday = shiftToday.AddDate(0, 0, -1)
+	}
+	
+	year, month, _ := shiftToday.Date()
+	firstShiftStart := time.Date(year, month, 1, 17, 0, 0, 0, loc).UTC()
+	lastDay := time.Date(year, month+1, 0, 0, 0, 0, 0, loc)
+	dayAfter := lastDay.AddDate(0, 0, 1)
+	lastShiftEnd := time.Date(dayAfter.Year(), dayAfter.Month(), dayAfter.Day(), 4, 0, 0, 0, loc).UTC()
+	
+	// COMPRAS del mes (calendario actual, no turnos)
+	actualMonth := now.Format("2006-01")
+	var totalCompras float64
+	var numCompras, itemsCriticos int
+	var topProveedor string
+	
+	s.DB.QueryRow(`SELECT COALESCE(SUM(monto_total),0), COUNT(*) FROM compras WHERE DATE_FORMAT(fecha_compra, '%Y-%m') = ?`, actualMonth).Scan(&totalCompras, &numCompras)
+	s.DB.QueryRow(`SELECT proveedor FROM compras WHERE DATE_FORMAT(fecha_compra, '%Y-%m') = ? AND proveedor IS NOT NULL GROUP BY proveedor ORDER BY COUNT(*) DESC LIMIT 1`, actualMonth).Scan(&topProveedor)
+	
+	// INVENTARIOS
+	var valorIngredientes, valorProductos float64
+	var itemsIngredientes, itemsProductos int
+	
+	s.DB.QueryRow(`
+		SELECT COALESCE(SUM(current_stock * cost_per_unit),0), COUNT(*)
+		FROM ingredients 
+		WHERE is_active = 1 AND category IN ('Carnes','Aves','Lácteos','Vegetales','Salsas','Aceites','Condimentos','Panes','Embutidos','queso')
+	`).Scan(&valorIngredientes, &itemsIngredientes)
+	
+	s.DB.QueryRow(`
+		SELECT COALESCE(SUM(p.stock_quantity * p.cost_price),0), COUNT(*)
+		FROM products p
+		LEFT JOIN product_recipes r ON p.id = r.product_id
+		WHERE p.is_active = 1 AND r.id IS NULL AND p.cost_price > 0 AND p.category_id = 5
+	`).Scan(&valorProductos, &itemsProductos)
+	
+	valorInventario := valorIngredientes + valorProductos
+	totalItems := itemsIngredientes + itemsProductos
+	
+	// Top item estancado
+	var topInventario string
+	var topInventarioValor float64
+	s.DB.QueryRow(`
+		SELECT name, (current_stock * cost_per_unit) as valor
+		FROM ingredients
+		WHERE is_active = 1 AND category IN ('Carnes','Aves','Lácteos','Vegetales','Salsas','Aceites','Condimentos','Panes','Embutidos','queso')
+		UNION ALL
+		SELECT p.name, (p.stock_quantity * p.cost_price)
+		FROM products p
+		LEFT JOIN product_recipes r ON p.id = r.product_id
+		WHERE p.is_active = 1 AND r.id IS NULL AND p.cost_price > 0 AND p.category_id = 5
+		ORDER BY valor DESC LIMIT 1
+	`).Scan(&topInventario, &topInventarioValor)
+	
+	// Producto más vendido (por ingresos)
+	var masVendido string
+	var masVendidoId int
+	var masVendidoIngresos float64
+	s.DB.QueryRow(`
+		SELECT oi.product_id, oi.product_name, SUM(oi.subtotal)
+		FROM tuu_order_items oi
+		INNER JOIN tuu_orders o ON oi.order_reference = o.order_number
+		WHERE o.created_at >= ? AND o.created_at < ? AND o.payment_status = 'paid'
+		GROUP BY oi.product_id, oi.product_name
+		ORDER BY SUM(oi.subtotal) DESC LIMIT 1
+	`, firstShiftStart, lastShiftEnd).Scan(&masVendidoId, &masVendido, &masVendidoIngresos)
+	
+	// Rotación de inventario
+	var costoVentas float64
+	s.DB.QueryRow(`
+		SELECT COALESCE(SUM(oi.quantity * COALESCE(p.cost_price, 0)), 0)
+		FROM tuu_order_items oi
+		JOIN tuu_orders o ON oi.order_reference = o.order_number
+		LEFT JOIN products p ON oi.product_id = p.id
+		WHERE o.created_at >= ? AND o.created_at < ? AND o.payment_status = 'paid'
+	`, firstShiftStart, lastShiftEnd).Scan(&costoVentas)
+	
+	rotacion := 0.0
+	if valorInventario > 0 {
+		rotacion = costoVentas / valorInventario
+	}
 	
 	c.JSON(200, gin.H{
 		"success": true,
 		"data": gin.H{
 			"compras": gin.H{
-				"total_mes":      0,
-				"numero_compras":  0,
-				"items_criticos":  0,
-				"top_proveedor":   "-",
+				"total_mes":      totalCompras,
+				"numero_compras":  numCompras,
+				"items_criticos":  itemsCriticos,
+				"top_proveedor":   topProveedor,
 			},
 			"inventarios": gin.H{
-				"valor_total":            0,
-				"items_activos":          0,
-				"top_inventario":         "-",
-				"top_inventario_valor":   0,
-				"rotacion":               0,
-				"mas_vendido":            "-",
-				"mas_vendido_id":         0,
-				"mas_vendido_ingresos":   0,
+				"valor_total":            valorInventario,
+				"items_activos":          totalItems,
+				"top_inventario":         topInventario,
+				"top_inventario_valor":   topInventarioValor,
+				"rotacion":               rotacion,
+				"mas_vendido":            masVendido,
+				"mas_vendido_id":         masVendidoId,
+				"mas_vendido_ingresos":   masVendidoIngresos,
 			},
 			"plan_compras": gin.H{
 				"items_reposicion": 0,
@@ -663,7 +746,7 @@ func (s *Server) getSalesAnalytics(c *gin.Context) {
 	case "week":
 		dateFilter = "YEARWEEK(created_at)=YEARWEEK(NOW())"
 	default:
-		dateFilter = "MONTH(created_at)=MONTH(NOW())"
+		dateFilter = "MONTH(created_at)=MONTH(NOW()) AND YEAR(created_at)=YEAR(NOW())"
 	}
 	
 	var totalOrders int
@@ -671,8 +754,35 @@ func (s *Server) getSalesAnalytics(c *gin.Context) {
 	s.DB.QueryRow(`SELECT COUNT(*) FROM tuu_orders WHERE `+dateFilter+` AND payment_status='paid'`).Scan(&totalOrders)
 	s.DB.QueryRow(`SELECT COALESCE(SUM(installment_amount),0) FROM tuu_orders WHERE `+dateFilter+` AND payment_status='paid'`).Scan(&totalRevenue)
 	s.DB.QueryRow(`SELECT COALESCE(SUM(delivery_fee),0) FROM tuu_orders WHERE `+dateFilter+` AND payment_status='paid'`).Scan(&totalDelivery)
+	
+	// Calcular costo real de productos vendidos
+	s.DB.QueryRow(`
+		SELECT COALESCE(SUM(oi.item_cost * oi.quantity), 0)
+		FROM tuu_order_items oi
+		JOIN tuu_orders o ON oi.order_reference = o.order_number
+		WHERE `+dateFilter+` AND o.payment_status='paid'
+	`).Scan(&totalCost)
+	
+	totalProfit = totalRevenue - totalCost
 	if totalOrders > 0 {
 		avgTicket = totalRevenue / float64(totalOrders)
+	}
+	
+	// Payment summary por método
+	rows, _ := s.DB.Query(`
+		SELECT payment_method, COUNT(*), COALESCE(SUM(installment_amount),0)
+		FROM tuu_orders WHERE `+dateFilter+` AND payment_status='paid'
+		GROUP BY payment_method
+	`)
+	defer rows.Close()
+	
+	paymentSummary := []gin.H{}
+	for rows.Next() {
+		var method string
+		var count int
+		var total float64
+		rows.Scan(&method, &count, &total)
+		paymentSummary = append(paymentSummary, gin.H{"method": method, "order_count": count, "total_sales": total, "total_cost": 0})
 	}
 	
 	c.JSON(200, gin.H{
@@ -686,28 +796,57 @@ func (s *Server) getSalesAnalytics(c *gin.Context) {
 				"total_delivery": totalDelivery,
 				"avg_ticket":     avgTicket,
 			},
-			"payment_summary": []gin.H{},
+			"payment_summary": paymentSummary,
 		},
 	})
 }
 
 // GET /api/get_month_comparison.php
 func (s *Server) getMonthComparison(c *gin.Context) {
-	var currentMonth, previousMonth float64
-	s.DB.QueryRow(`SELECT COALESCE(SUM(installment_amount),0) FROM tuu_orders WHERE MONTH(created_at)=MONTH(NOW()) AND payment_status='paid'`).Scan(&currentMonth)
-	s.DB.QueryRow(`SELECT COALESCE(SUM(installment_amount),0) FROM tuu_orders WHERE MONTH(created_at)=MONTH(NOW())-1 AND payment_status='paid'`).Scan(&previousMonth)
+	// Ventas por día del mes actual
+	currentSales := make([]float64, 31)
+	rows, _ := s.DB.Query(`
+		SELECT DAY(created_at)-1 as day_idx, COALESCE(SUM(installment_amount),0)
+		FROM tuu_orders 
+		WHERE MONTH(created_at)=MONTH(NOW()) AND YEAR(created_at)=YEAR(NOW()) AND payment_status='paid'
+		GROUP BY day_idx
+	`)
+	for rows.Next() {
+		var idx int
+		var sales float64
+		rows.Scan(&idx, &sales)
+		if idx >= 0 && idx < 31 {
+			currentSales[idx] = sales
+		}
+	}
+	rows.Close()
 	
-	_ = currentMonth
-	_ = previousMonth
+	// Ventas por día del mes anterior
+	prevSales := make([]float64, 31)
+	rows, _ = s.DB.Query(`
+		SELECT DAY(created_at)-1 as day_idx, COALESCE(SUM(installment_amount),0)
+		FROM tuu_orders 
+		WHERE MONTH(created_at)=MONTH(NOW())-1 AND YEAR(created_at)=YEAR(NOW()) AND payment_status='paid'
+		GROUP BY day_idx
+	`)
+	for rows.Next() {
+		var idx int
+		var sales float64
+		rows.Scan(&idx, &sales)
+		if idx >= 0 && idx < 31 {
+			prevSales[idx] = sales
+		}
+	}
+	rows.Close()
 	
 	c.JSON(200, gin.H{
 		"success": true,
 		"data": gin.H{
 			"currentMonth": gin.H{
-				"salesByWeekday": []float64{},
+				"salesByWeekday": currentSales,
 			},
 			"previousMonth": gin.H{
-				"salesByWeekday": []float64{},
+				"salesByWeekday": prevSales,
 			},
 		},
 	})
@@ -734,4 +873,339 @@ func (s *Server) getFinancialReports(c *gin.Context) {
 		reports = append(reports, gin.H{"month": month, "orders": orders, "revenue": revenue, "delivery_fees": fees, "net_revenue": revenue - fees})
 	}
 	c.JSON(200, gin.H{"success": true, "reports": reports})
+}
+
+// GET /api/get_previous_month_summary.php
+func (s *Server) getPreviousMonthSummary(c *gin.Context) {
+	var totalOrders int
+	var totalRevenue, totalCost, totalProfit, avgTicket float64
+	
+	s.DB.QueryRow(`
+		SELECT COUNT(*), COALESCE(SUM(installment_amount),0)
+		FROM tuu_orders 
+		WHERE MONTH(created_at)=MONTH(NOW())-1 AND YEAR(created_at)=YEAR(NOW()) AND payment_status='paid'
+	`).Scan(&totalOrders, &totalRevenue)
+	
+	s.DB.QueryRow(`
+		SELECT COALESCE(SUM(oi.item_cost * oi.quantity), 0)
+		FROM tuu_order_items oi
+		JOIN tuu_orders o ON oi.order_reference = o.order_number
+		WHERE MONTH(o.created_at)=MONTH(NOW())-1 AND YEAR(o.created_at)=YEAR(NOW()) AND o.payment_status='paid'
+	`).Scan(&totalCost)
+	
+	totalProfit = totalRevenue - totalCost
+	marginPercent := 0.0
+	if totalRevenue > 0 {
+		avgTicket = totalRevenue / float64(totalOrders)
+		marginPercent = (totalProfit / totalRevenue) * 100
+	}
+	
+	c.JSON(200, gin.H{
+		"success": true,
+		"data": gin.H{
+			"total_orders":   totalOrders,
+			"total_revenue":  totalRevenue,
+			"total_cost":     totalCost,
+			"total_profit":   totalProfit,
+			"avg_ticket":     avgTicket,
+			"margin_percent": marginPercent,
+		},
+	})
+}
+
+
+// GET /api/tuu/get_from_mysql.php?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&filter_type=month&page=1&limit=50
+func (s *Server) getTUUTransactions(c *gin.Context) {
+	startDate := c.DefaultQuery("start_date", "2024-01-01")
+	endDate := c.DefaultQuery("end_date", time.Now().AddDate(0, 0, 1).Format("2006-01-02"))
+	filterType := c.DefaultQuery("filter_type", "date_range")
+	page := c.DefaultQuery("page", "1")
+	limit := c.DefaultQuery("limit", "50")
+	
+	pageNum := 1
+	limitNum := 50
+	fmt.Sscanf(page, "%d", &pageNum)
+	fmt.Sscanf(limit, "%d", &limitNum)
+	offset := (pageNum - 1) * limitNum
+	
+	var whereClause string
+	var params []interface{}
+	
+	if filterType == "month" {
+		loc, _ := time.LoadLocation("America/Santiago")
+		now := time.Now().In(loc)
+		currentHour := now.Hour()
+		
+		shiftToday := now
+		if currentHour >= 0 && currentHour < 4 {
+			shiftToday = shiftToday.AddDate(0, 0, -1)
+		}
+		
+		year, month, _ := shiftToday.Date()
+		firstShiftStart := time.Date(year, month, 1, 17, 0, 0, 0, loc).UTC()
+		
+		lastDay := time.Date(year, month+1, 0, 0, 0, 0, 0, loc)
+		dayAfter := lastDay.AddDate(0, 0, 1)
+		lastShiftEnd := time.Date(dayAfter.Year(), dayAfter.Month(), dayAfter.Day(), 4, 0, 0, 0, loc).UTC()
+		
+		whereClause = "o.created_at >= ? AND o.created_at < ?"
+		params = []interface{}{firstShiftStart, lastShiftEnd}
+	} else {
+		whereClause = "DATE(o.created_at) >= ? AND DATE(o.created_at) <= ?"
+		params = []interface{}{startDate, endDate}
+	}
+	
+	// Contar total primero
+	var totalRecords int
+	s.DB.QueryRow("SELECT COUNT(*) FROM tuu_orders o WHERE "+whereClause+" AND o.payment_status = 'paid'", params...).Scan(&totalRecords)
+	
+	// Query con LIMIT y OFFSET para paginación
+	query := `
+		SELECT 
+			o.id, o.order_number,
+			COALESCE(o.tuu_amount, o.installment_amount, o.product_price, 0) as amount,
+			COALESCE(o.payment_status, o.status) as status,
+			o.order_status, o.customer_name, o.customer_phone, o.product_name,
+			o.created_at, o.tuu_transaction_id, o.payment_method, o.delivery_type,
+			COALESCE(o.delivery_fee, 0) as delivery_fee,
+			COALESCE((SELECT SUM(item_cost * quantity) FROM tuu_order_items WHERE order_reference = o.order_number), 0) as order_cost,
+			CASE 
+				WHEN o.payment_method = 'webpay' THEN 'app'
+				WHEN o.payment_method IN ('cash', 'card', 'transfer') THEN 'caja'
+				WHEN o.payment_method = 'pedidosya' THEN 'pedidosya'
+				ELSE 'online'
+			END as payment_source
+		FROM tuu_orders o
+		WHERE ` + whereClause + ` AND o.payment_status = 'paid'
+		ORDER BY o.created_at DESC
+		LIMIT ? OFFSET ?
+	`
+	
+	params = append(params, limitNum, offset)
+	rows, err := s.DB.Query(query, params...)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	defer rows.Close()
+	
+	loc, _ := time.LoadLocation("America/Santiago")
+	transactions := []map[string]interface{}{}
+	
+	for rows.Next() {
+		var id int
+		var orderNum, status, orderStatus, customerName, customerPhone, productName, tuuTxID, paymentMethod, deliveryType, paymentSource string
+		var amount, deliveryFee, orderCost float64
+		var createdAt time.Time
+		
+		rows.Scan(&id, &orderNum, &amount, &status, &orderStatus, &customerName, &customerPhone, &productName, &createdAt, &tuuTxID, &paymentMethod, &deliveryType, &deliveryFee, &orderCost, &paymentSource)
+		
+		// Convertir a hora Chile y aplicar lógica de turnos
+		chile := createdAt.In(loc)
+		if chile.Hour() >= 0 && chile.Hour() < 4 {
+			chile = chile.AddDate(0, 0, -1)
+		}
+		
+		// Solo cargar items si se solicita (query param ?include_items=1)
+		var items []map[string]interface{}
+		if c.Query("include_items") == "1" {
+			itemsRows, _ := s.DB.Query(`
+				SELECT oi.id, oi.product_id, oi.quantity, oi.product_name, oi.item_cost, oi.subtotal
+				FROM tuu_order_items oi WHERE oi.order_id = ?`, id)
+			
+			for itemsRows.Next() {
+				var itemID, productID, qty int
+				var itemName, itemCost string
+				var subtotal float64
+				
+				itemsRows.Scan(&itemID, &productID, &qty, &itemName, &itemCost, &subtotal)
+				items = append(items, map[string]interface{}{
+					"id": itemID, "product_id": productID, "quantity": qty,
+					"product_name": itemName, "item_cost": itemCost, "subtotal": subtotal,
+				})
+			}
+			itemsRows.Close()
+		}
+		
+		transactions = append(transactions, map[string]interface{}{
+			"id": id, "order_reference": orderNum, "amount": amount, "status": status,
+			"order_status": orderStatus, "customer_name": customerName, "customer_phone": customerPhone,
+			"product_name": productName, "created_at": chile.Format("2006-01-02 15:04:05"),
+			"tuu_transaction_id": tuuTxID, "payment_method": paymentMethod, "delivery_type": deliveryType,
+			"delivery_fee": deliveryFee, "order_cost": orderCost, "payment_source": paymentSource,
+			"items": items,
+		})
+	}
+	
+	// Calcular estadísticas (solo de la página actual para rapidez)
+	var appTotal, cajaTotal, pedidosyaTotal float64
+	var appCount, cajaCount, pedidosyaCount int
+	
+	for _, t := range transactions {
+		amt := t["amount"].(float64)
+		src := t["payment_source"].(string)
+		
+		switch src {
+		case "app":
+			appTotal += amt
+			appCount++
+		case "caja":
+			cajaTotal += amt
+			cajaCount++
+		case "pedidosya":
+			pedidosyaTotal += amt
+			pedidosyaCount++
+		}
+	}
+	
+	totalRevenue := appTotal + cajaTotal + pedidosyaTotal
+	totalPages := (totalRecords + limitNum - 1) / limitNum
+	
+	c.JSON(200, gin.H{
+		"success": true,
+		"data": gin.H{
+			"combined_stats": gin.H{
+				"pos_revenue": 0.0, "caja_revenue": cajaTotal, "app_revenue": appTotal,
+				"pedidosya_revenue": pedidosyaTotal, "online_revenue": totalRevenue,
+				"total_revenue": totalRevenue, "pos_transactions": 0,
+				"caja_transactions": cajaCount, "app_transactions": appCount,
+				"pedidosya_transactions": pedidosyaCount, "online_transactions": len(transactions),
+				"total_transactions": totalRecords,
+				"date_range": gin.H{"start_date": startDate, "end_date": endDate},
+			},
+			"all_transactions": transactions,
+			"pagination": gin.H{
+				"current_page": pageNum, "total_pages": totalPages,
+				"total_records": totalRecords, "per_page": limitNum,
+			},
+		},
+	})
+}
+
+
+// GET /api/tuu/stream?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&filter_type=month
+// Streaming asíncrono de transacciones en chunks de 50
+func (s *Server) streamTUUTransactions(c *gin.Context) {
+	startDate := c.DefaultQuery("start_date", "2024-01-01")
+	endDate := c.DefaultQuery("end_date", time.Now().AddDate(0, 0, 1).Format("2006-01-02"))
+	filterType := c.DefaultQuery("filter_type", "date_range")
+	
+	var whereClause string
+	var params []interface{}
+	
+	if filterType == "month" {
+		loc, _ := time.LoadLocation("America/Santiago")
+		now := time.Now().In(loc)
+		currentHour := now.Hour()
+		
+		shiftToday := now
+		if currentHour >= 0 && currentHour < 4 {
+			shiftToday = shiftToday.AddDate(0, 0, -1)
+		}
+		
+		year, month, _ := shiftToday.Date()
+		firstShiftStart := time.Date(year, month, 1, 17, 0, 0, 0, loc).UTC()
+		lastDay := time.Date(year, month+1, 0, 0, 0, 0, 0, loc)
+		dayAfter := lastDay.AddDate(0, 0, 1)
+		lastShiftEnd := time.Date(dayAfter.Year(), dayAfter.Month(), dayAfter.Day(), 4, 0, 0, 0, loc).UTC()
+		
+		whereClause = "o.created_at >= ? AND o.created_at < ?"
+		params = []interface{}{firstShiftStart, lastShiftEnd}
+	} else {
+		whereClause = "DATE(o.created_at) >= ? AND DATE(o.created_at) <= ?"
+		params = []interface{}{startDate, endDate}
+	}
+	
+	// Headers para streaming
+	c.Header("Content-Type", "application/json")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+	
+	query := `
+		SELECT 
+			o.id, o.order_number,
+			COALESCE(o.tuu_amount, o.installment_amount, o.product_price, 0) as amount,
+			o.customer_name, o.product_name, o.created_at, o.payment_method,
+			COALESCE(o.delivery_fee, 0) as delivery_fee,
+			CASE 
+				WHEN o.payment_method = 'webpay' THEN 'app'
+				WHEN o.payment_method IN ('cash', 'card', 'transfer') THEN 'caja'
+				WHEN o.payment_method = 'pedidosya' THEN 'pedidosya'
+				ELSE 'online'
+			END as payment_source
+		FROM tuu_orders o
+		WHERE ` + whereClause + ` AND o.payment_status = 'paid'
+		ORDER BY o.created_at DESC
+	`
+	
+	rows, err := s.DB.Query(query, params...)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	defer rows.Close()
+	
+	loc, _ := time.LoadLocation("America/Santiago")
+	writer := c.Writer
+	flusher, _ := writer.(http.Flusher)
+	
+	// Enviar header inicial
+	writer.Write([]byte(`{"success":true,"stream":true,"data":[`))
+	flusher.Flush()
+	
+	count := 0
+	var appTotal, cajaTotal, pedidosyaTotal float64
+	var appCount, cajaCount, pedidosyaCount int
+	
+	for rows.Next() {
+		var id int
+		var orderNum, customerName, productName, paymentMethod, paymentSource string
+		var amount, deliveryFee float64
+		var createdAt time.Time
+		
+		rows.Scan(&id, &orderNum, &amount, &customerName, &productName, &createdAt, &paymentMethod, &deliveryFee, &paymentSource)
+		
+		chile := createdAt.In(loc)
+		if chile.Hour() >= 0 && chile.Hour() < 4 {
+			chile = chile.AddDate(0, 0, -1)
+		}
+		
+		// Acumular stats
+		switch paymentSource {
+		case "app":
+			appTotal += amount
+			appCount++
+		case "caja":
+			cajaTotal += amount
+			cajaCount++
+		case "pedidosya":
+			pedidosyaTotal += amount
+			pedidosyaCount++
+		}
+		
+		if count > 0 {
+			writer.Write([]byte(","))
+		}
+		
+		// Enviar transacción simplificada (sin items para velocidad)
+		tx := fmt.Sprintf(`{"id":%d,"order_reference":"%s","amount":%.2f,"customer_name":"%s","product_name":"%s","created_at":"%s","payment_method":"%s","payment_source":"%s"}`,
+			id, orderNum, amount, customerName, productName, chile.Format("2006-01-02 15:04:05"), paymentMethod, paymentSource)
+		
+		writer.Write([]byte(tx))
+		count++
+		
+		// Flush cada 50 transacciones
+		if count%50 == 0 {
+			flusher.Flush()
+		}
+	}
+	
+	// Enviar stats finales
+	totalRevenue := appTotal + cajaTotal + pedidosyaTotal
+	stats := fmt.Sprintf(`],"stats":{"app_revenue":%.2f,"caja_revenue":%.2f,"pedidosya_revenue":%.2f,"total_revenue":%.2f,"app_transactions":%d,"caja_transactions":%d,"pedidosya_transactions":%d,"total_transactions":%d}}`,
+		appTotal, cajaTotal, pedidosyaTotal, totalRevenue, appCount, cajaCount, pedidosyaCount, count)
+	
+	writer.Write([]byte(stats))
+	flusher.Flush()
 }

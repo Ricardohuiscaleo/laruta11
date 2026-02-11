@@ -1139,7 +1139,7 @@
               <div class="card-content">
                 <p style="margin-bottom: 16px; color: #666;">Simula un usuario real navegando por la app y verifica que el sistema de tracking funcione correctamente.</p>
                 <div style="display: flex; gap: 12px; margin-bottom: 16px;">
-                  <button class="btn btn-primary" onclick="window.open('/api/robot_test_tracking.php', '_blank')">🚀 Ejecutar Robot</button>
+                  <button class="btn btn-primary" onclick="alert('⚠️ Robot test no migrado aún')">🚀 Ejecutar Robot</button>
                   <button class="btn btn-secondary" onclick="checkRobotStatus()">📊 Ver Estado</button>
                 </div>
                 <div style="font-size: 12px; color: #666;">
@@ -1161,8 +1161,8 @@
               <div class="card-content">
                 <p style="margin-bottom: 16px; color: #666;">Prueba cada API de tracking por separado para identificar problemas específicos.</p>
                 <div style="display: flex; gap: 12px; margin-bottom: 16px;">
-                  <button class="btn btn-primary" onclick="window.open('/api/test_analytics_system.php', '_blank')">🧪 Test APIs</button>
-                  <button class="btn btn-secondary" onclick="window.open('/api/check_tracking_data.php', '_blank')">📋 Ver Datos</button>
+                  <button class="btn btn-primary" onclick="alert('⚠️ Test analytics no migrado aún')">🧪 Test APIs</button>
+                  <button class="btn btn-secondary" onclick="alert('⚠️ Check tracking no migrado aún')">📋 Ver Datos</button>
                 </div>
                 <div style="font-size: 12px; color: #666;">
                   <p><strong>APIs Disponibles:</strong></p>
@@ -1185,18 +1185,18 @@
               <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
                 <div>
                   <h4 style="margin-bottom: 8px;">Base de Datos</h4>
-                  <button class="btn btn-secondary" onclick="window.open('/api/check_visits_table.php', '_blank')" style="width: 100%; margin-bottom: 8px;">🗃️ Verificar Tablas</button>
-                  <button class="btn btn-secondary" onclick="window.open('/api/update_visits_table.php', '_blank')" style="width: 100%;">🔧 Actualizar Estructura</button>
+                  <button class="btn btn-secondary" onclick="alert('⚠️ Check visits no migrado aún')" style="width: 100%; margin-bottom: 8px;">🗃️ Verificar Tablas</button>
+                  <button class="btn btn-secondary" onclick="alert('⚠️ Update visits no migrado aún')" style="width: 100%;">🔧 Actualizar Estructura</button>
                 </div>
                 <div>
                   <h4 style="margin-bottom: 8px;">Analytics</h4>
-                  <button class="btn btn-secondary" onclick="window.open('/api/app/get_user_behavior.php', '_blank')" style="width: 100%; margin-bottom: 8px;">📊 Datos Comportamiento</button>
+                  <button class="btn btn-secondary" onclick="alert('⚠️ User behavior no migrado aún')" style="width: 100%; margin-bottom: 8px;">📊 Datos Comportamiento</button>
                   <button class="btn btn-secondary" onclick="window.open('/admin/analytics', '_blank')" style="width: 100%;">📈 Dashboard Analytics</button>
                 </div>
                 <div>
                   <h4 style="margin-bottom: 8px;">Limpieza</h4>
                   <button class="btn btn-danger" onclick="cleanRobotData()" style="width: 100%; margin-bottom: 8px;">🧹 Limpiar Datos Robot</button>
-                  <button class="btn btn-secondary" onclick="window.open('/api/simulate_visit.php', '_blank')" style="width: 100%;">🎯 Simular Visita</button>
+                  <button class="btn btn-secondary" onclick="alert('⚠️ Simulate visit no migrado aún')" style="width: 100%;">🎯 Simular Visita</button>
                 </div>
               </div>
             </div>
@@ -1965,7 +1965,7 @@
     };
     
     window.loadUsers = function() {
-      fetch('/api/users/get_users.php')
+      fetch('https://websites-api-go-caja-r11.dj3bvg.easypanel.host/api/users/get_users.php')
       .then(r => r.json())
       .then(usersResponse => {
         const tbody = document.querySelector('#usersTable tbody');
@@ -2237,7 +2237,7 @@
     let currentStatusFilter = 'all';
     
     window.loadProducts = function() {
-      fetch('/api/get_productos.php?include_inactive=1')
+      fetch('https://websites-api-go-caja-r11.dj3bvg.easypanel.host/api/products?include_inactive=1')
         .then(r => r.json())
         .then(data => {
           allProducts = Array.isArray(data) ? data : [];
@@ -2648,7 +2648,7 @@
     };
     
     window.logout = function() {
-      fetch('/api/admin_logout.php').then(() => window.location.href = '/admin/login');
+      fetch('https://websites-api-go-caja-r11.dj3bvg.easypanel.host/api/auth/logout', {method: 'POST'}).then(() => window.location.href = '/admin/login');
     };
     
     // ========== MILITARES RL6 FUNCTIONS ==========
@@ -3056,6 +3056,8 @@
     };
     
     window.checkRobotStatus = function() {
+      // TODO: Migrar check_tracking_data.php a Go
+      return; // Deshabilitado temporalmente
       fetch('/api/check_tracking_data.php')
         .then(r => r.json())
         .then(data => {
@@ -3653,7 +3655,7 @@
     };
     
     window.logout = function() {
-      fetch('/api/admin_logout.php').then(() => window.location.href = '/admin/login');
+      fetch('https://websites-api-go-caja-r11.dj3bvg.easypanel.host/api/auth/logout', {method: 'POST'}).then(() => window.location.href = '/admin/login');
     };
     
 
@@ -3662,7 +3664,7 @@
     let currentSalesView = '1d'; // '1d', '1w', '1m', '3m', '6m', '1y', 'all'
     
     window.loadUsersCount = function() {
-      fetch('/api/users/get_users.php')
+      fetch('https://websites-api-go-caja-r11.dj3bvg.easypanel.host/api/users/get_users.php')
         .then(r => r.json())
         .then(response => {
           const users = response.success ? response.data : (Array.isArray(response) ? response : []);
@@ -3711,7 +3713,7 @@
       const startDate = '2024-10-14';
       const endDate = new Date().toISOString().split('T')[0];
       
-      fetch(`/api/tuu/get_from_mysql.php?start_date=${startDate}&end_date=${endDate}&t=${Date.now()}`)
+      fetch(`https://websites-api-go-caja-r11.dj3bvg.easypanel.host/api/tuu/get_from_mysql.php?start_date=${startDate}&end_date=${endDate}&t=${Date.now()}`)
         .then(r => r.json())
         .then(data => {
           if (data.success && data.data) {
@@ -4799,7 +4801,7 @@
       const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
       
       // Cargar datos TUU del mes específico
-      fetch(`/api/tuu/get_from_mysql.php?start_date=${startDate}&end_date=${endDate}&t=${Date.now()}`)
+      fetch(`https://websites-api-go-caja-r11.dj3bvg.easypanel.host/api/tuu/get_from_mysql.php?start_date=${startDate}&end_date=${endDate}&t=${Date.now()}`)
         .then(r => r.json())
         .then(data => {
           if (data.success && data.data) {
@@ -5046,7 +5048,7 @@
       const lastDay = new Date(year, month + 1, 0).getDate();
       const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
       
-      fetch(`/api/tuu/get_from_mysql.php?start_date=${startDate}&end_date=${endDate}&t=${Date.now()}`)
+      fetch(`https://websites-api-go-caja-r11.dj3bvg.easypanel.host/api/tuu/get_from_mysql.php?start_date=${startDate}&end_date=${endDate}&t=${Date.now()}`)
         .then(r => r.json())
         .then(data => {
           if (!data.success) return;
@@ -5750,7 +5752,7 @@
     
     window.loadCombos = function() {
       Promise.all([
-        fetch('/api/get_productos.php').then(r => r.json()),
+        fetch('https://websites-api-go-caja-r11.dj3bvg.easypanel.host/api/products').then(r => r.json()),
         fetch('/api/get_combos.php').then(r => r.json())
       ])
       .then(([productosData, combosData]) => {

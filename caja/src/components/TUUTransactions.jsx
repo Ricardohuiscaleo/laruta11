@@ -23,25 +23,42 @@ export default function TUUTransactions() {
         end_date: endDate
       });
       
-      // Usar la nueva API súper rápida desde MySQL
-      const response = await fetch(`/api/tuu/get_from_mysql.php?${queryParams}`);
-      const data = await response.json();
+      // Usar streaming para carga progresiva
+      const response = await fetch(`https://websites-api-go-caja-r11.dj3bvg.easypanel.host/api/tuu/stream?${queryParams}`);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const allTransactions = [];
       
-      if (data.success && data.data) {
-        const reports = data.data.all_transactions || [];
-        const stats = data.data.combined_stats || {};
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
         
-        setTransactions(reports);
-        setStats({
-          total_transactions: stats.total_transactions || 0,
-          total_sales: stats.total_revenue || 0,
-          completed_transactions: stats.pos_transactions + stats.online_transactions || 0
-        });
-        setLastUpdate(new Date());
-      } else {
-        setTransactions([]);
-        setStats({ total_transactions: 0, total_sales: 0, completed_transactions: 0 });
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const data = JSON.parse(line);
+            if (data.type === 'transaction') {
+              allTransactions.push(data.data);
+              setTransactions([...allTransactions]);
+            } else if (data.type === 'stats') {
+              setStats({
+                total_transactions: data.data.total_transactions || 0,
+                total_sales: data.data.total_sales || 0,
+                completed_transactions: data.data.total_transactions || 0
+              });
+            }
+          } catch (e) {
+            console.error('Parse error:', e);
+          }
+        }
       }
+      
+      setLastUpdate(new Date());
     } catch (error) {
       console.error('Error:', error);
       setTransactions([]);

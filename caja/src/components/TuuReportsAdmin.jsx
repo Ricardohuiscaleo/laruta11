@@ -51,38 +51,49 @@ const TuuReportsAdmin = () => {
 
     setLoading(true);
     try {
-      // Usar la nueva API súper rápida desde MySQL
       const queryParams = new URLSearchParams({
         start_date: filters.start_date,
-        end_date: filters.end_date,
-        page: filters.page,
-        limit: filters.page_size,
-        sort_by: filters.sort_by,
-        sort_order: filters.sort_order
+        end_date: filters.end_date
       }).toString();
       
-      const response = await fetch(`/api/tuu/get_from_mysql.php?${queryParams}`);
-      const data = await response.json();
+      const response = await fetch(`https://websites-api-go-caja-r11.dj3bvg.easypanel.host/api/tuu/stream?${queryParams}`);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const allTransactions = [];
       
-      if (data.success && data.data) {
-        const allTransactions = data.data.all_transactions || [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
         
-        // Filtrar por dispositivo si se especifica
-        const filteredReports = filters.serial_number ? 
-          allTransactions.filter(t => 
-            (t.posSerialNumber || t.pos_serial_number) === filters.serial_number
-          ) : allTransactions;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
         
-        setReports(filteredReports);
-        setPagination({
-          totalItems: data.data.pagination?.total_records || filteredReports.length,
-          totalPages: data.data.pagination?.total_pages || 1,
-          currentPage: data.data.pagination?.current_page || 1
-        });
-      } else {
-        alert(`Error: ${data.error}`);
-        setReports([]);
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const data = JSON.parse(line);
+            if (data.type === 'transaction') {
+              allTransactions.push(data.data);
+            }
+          } catch (e) {
+            console.error('Parse error:', e);
+          }
+        }
       }
+      
+      const filteredReports = filters.serial_number ? 
+        allTransactions.filter(t => 
+          (t.posSerialNumber || t.pos_serial_number) === filters.serial_number
+        ) : allTransactions;
+      
+      setReports(filteredReports);
+      setPagination({
+        totalItems: filteredReports.length,
+        totalPages: Math.ceil(filteredReports.length / filters.page_size),
+        currentPage: 1
+      });
     } catch (error) {
       console.error('Error loading reports:', error);
       alert('Error al cargar reportes');

@@ -74,11 +74,14 @@ func main() {
 	// Dashboard (consolidado - 8 endpoints PHP → 1 endpoint Go con goroutines)
 	r.GET("/api/dashboard", s.getDashboard)
 
-	// Dashboard individual endpoints
+	// TUU Payments
+	r.GET("/api/tuu/get_from_mysql.php", s.getTUUTransactions)
+	r.GET("/api/tuu/stream", s.streamTUUTransactions)
 	r.GET("/api/get_dashboard_analytics.php", s.getDashboardAnalytics)
 	r.GET("/api/get_dashboard_cards.php", s.getDashboardCards)
 	r.GET("/api/get_sales_analytics.php", s.getSalesAnalytics)
 	r.GET("/api/get_month_comparison.php", s.getMonthComparison)
+	r.GET("/api/get_previous_month_summary.php", s.getPreviousMonthSummary)
 	r.GET("/api/get_financial_reports.php", s.getFinancialReports)
 
 	port := os.Getenv("PORT")

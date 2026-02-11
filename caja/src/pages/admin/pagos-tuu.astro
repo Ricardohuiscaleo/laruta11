@@ -176,7 +176,6 @@
       }
     }
     
-    // Variables globales
     let tuuAllTransactions = [];
     let tuuFilteredTransactions = [];
     let tuuCurrentPage = 1;
@@ -184,6 +183,123 @@
     let autoReloadInterval;
     let isLoadingData = false;
     let lastRenderedHTML = '';
+    
+    function processTransactionsData(stats, transactions, isFirstLoad, contentEl) {
+      console.log('Total transacciones:', transactions.length);
+      
+      const paymentMethods = {
+        'card': { icon: 'credit-card', label: 'Tarjetas', sales: 0, cost: 0, orders: 0 },
+        'transfer': { icon: 'landmark', label: 'Transfer', sales: 0, cost: 0, orders: 0 },
+        'cash': { icon: 'banknote', label: 'Efectivo', sales: 0, cost: 0, orders: 0 },
+        'webpay': { icon: 'credit-card', label: 'Webpay', sales: 0, cost: 0, orders: 0 },
+        'pedidosya': { icon: 'bike', label: 'PedidosYA', sales: 0, cost: 0, orders: 0 },
+        'rl6_credit': { icon: 'credit-card', label: 'Crédito RL6', sales: 0, cost: 0, orders: 0 }
+      };
+      
+      let totalCost = 0, totalDeliveryFee = 0;
+      
+      transactions.forEach(t => {
+        const method = t.payment_method || 'cash';
+        const amount = parseFloat(t.amount || 0);
+        const deliveryFee = parseFloat(t.delivery_fee || 0);
+        const netAmount = amount - deliveryFee;
+        
+        let realCost = 0;
+        if (t.items && t.items.length > 0) {
+          t.items.forEach(item => {
+            realCost += parseFloat(item.item_cost || 0) * parseFloat(item.quantity || 1);
+          });
+        } else {
+          realCost = netAmount * 0.35;
+        }
+        
+        if (paymentMethods[method]) {
+          paymentMethods[method].sales += netAmount;
+          paymentMethods[method].cost += realCost;
+          paymentMethods[method].orders += 1;
+        }
+        
+        totalCost += realCost;
+        totalDeliveryFee += deliveryFee;
+      });
+      
+      const totalSales = stats.total_revenue || 0;
+      const totalSalesNet = totalSales - totalDeliveryFee;
+      const totalProfit = totalSalesNet - totalCost;
+      
+      const totalSalesEl = document.getElementById('tuu-total-sales');
+      const deliveryDiscountEl = document.getElementById('tuu-delivery-discount');
+      const totalCostEl = document.getElementById('tuu-total-cost');
+      const totalProfitEl = document.getElementById('tuu-total-profit');
+      const transactionsCountEl = document.getElementById('tuu-transactions-count');
+      const lastUpdateEl = document.getElementById('tuu-last-update');
+      
+      if (totalSalesEl) totalSalesEl.textContent = '$' + new Intl.NumberFormat('es-CL').format(totalSalesNet);
+      if (deliveryDiscountEl) {
+        deliveryDiscountEl.textContent = totalDeliveryFee > 0 ? `(-$${new Intl.NumberFormat('es-CL').format(totalDeliveryFee)} delivery)` : '';
+      }
+      if (totalCostEl) totalCostEl.textContent = '$' + new Intl.NumberFormat('es-CL', {maximumFractionDigits: 0}).format(totalCost);
+      if (totalProfitEl) totalProfitEl.textContent = '$' + new Intl.NumberFormat('es-CL', {maximumFractionDigits: 0}).format(totalProfit);
+      if (transactionsCountEl) {
+        const totalOrders = stats.total_transactions || 0;
+        transactionsCountEl.textContent = totalOrders;
+        const labelEl = document.getElementById('tuu-transactions-label');
+        if (labelEl && totalOrders > 0 && transactions.length > 0) {
+          const dates = transactions.map(t => new Date(t.created_at || t.payment_date_time).getTime());
+          const minDate = Math.min(...dates);
+          const maxDate = Math.max(...dates);
+          const daysDiff = Math.max(1, Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1);
+          const ordersPerDay = (totalOrders / daysDiff).toFixed(1);
+          labelEl.innerHTML = `<i data-lucide="receipt" style="width: 14px; height: 14px;"></i> ${totalOrders} / ${daysDiff}d = ${ordersPerDay}/día`;
+          if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+      }
+      if (lastUpdateEl) {
+        lastUpdateEl.textContent = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+      
+      const paymentMethodsGrid = document.getElementById('payment-methods-grid');
+      if (paymentMethodsGrid) {
+        paymentMethodsGrid.innerHTML = Object.entries(paymentMethods).map(([key, data]) => {
+          const profit = data.sales - data.cost;
+          const profitPercent = data.sales > 0 ? ((profit / data.sales) * 100).toFixed(1) : 0;
+          return `
+            <div class="stat-card" style="border-left: 4px solid ${data.sales > 0 ? '#10b981' : '#e5e5e5'};">
+              <div style="font-size: clamp(1.25rem, 3vw, 1.5rem); font-weight: 700; color: #059669; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="${data.icon}" style="width: 20px; height: 20px;"></i> $${new Intl.NumberFormat('es-CL').format(data.sales)}
+              </div>
+              <div style="font-size: clamp(0.75rem, 1.8vw, 0.875rem); color: #666; margin-bottom: 8px;">${data.label}</div>
+              <div style="font-size: clamp(0.7rem, 1.5vw, 0.8rem); color: #999; margin-bottom: 2px; display: flex; align-items: center; gap: 4px;">
+                <i data-lucide="package" style="width: 12px; height: 12px;"></i> Costo: $${new Intl.NumberFormat('es-CL', {maximumFractionDigits: 0}).format(data.cost)}
+              </div>
+              <div style="font-size: clamp(0.7rem, 1.5vw, 0.8rem); color: #0284c7; margin-bottom: 2px; display: flex; align-items: center; gap: 4px;">
+                <i data-lucide="trending-up" style="width: 12px; height: 12px;"></i> Utilidad: $${new Intl.NumberFormat('es-CL', {maximumFractionDigits: 0}).format(profit)} (${profitPercent}%)
+              </div>
+              <div style="font-size: clamp(0.7rem, 1.5vw, 0.8rem); color: #666; display: flex; align-items: center; gap: 4px;">
+                <i data-lucide="receipt" style="width: 12px; height: 12px;"></i> ${data.orders} pedidos
+              </div>
+            </div>
+          `;
+        }).join('');
+        
+        if (totalDeliveryFee > 0) {
+          paymentMethodsGrid.innerHTML += `
+            <div class="stat-card" style="border-left: 4px solid #f59e0b;">
+              <div style="font-size: clamp(1.25rem, 3vw, 1.5rem); font-weight: 700; color: #f59e0b; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="bike" style="width: 20px; height: 20px;"></i> $${new Intl.NumberFormat('es-CL').format(totalDeliveryFee)}
+              </div>
+              <div style="font-size: clamp(0.75rem, 1.8vw, 0.875rem); color: #666;">Delivery (Rider)</div>
+            </div>
+          `;
+        }
+        
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      }
+      
+      tuuCurrentPage = 1;
+      renderAllAsCards();
+      if (contentEl) contentEl.style.display = 'block';
+    }
     
     // Auto-reload en tiempo real (cada 5 segundos)
     function startAutoReload() {
@@ -313,139 +429,7 @@
           if (data.success && data.data) {
             const stats = data.data.combined_stats;
             tuuAllTransactions = data.data.all_transactions || [];
-            
-            console.log('Total transacciones:', tuuAllTransactions.length);
-            console.log('Debug info:', data.data.debug);
-            
-            // Calcular totales y desglose por método de pago
-            const paymentMethods = {
-              'card': { icon: 'credit-card', label: 'Tarjetas', sales: 0, cost: 0, orders: 0 },
-              'transfer': { icon: 'landmark', label: 'Transfer', sales: 0, cost: 0, orders: 0 },
-              'cash': { icon: 'banknote', label: 'Efectivo', sales: 0, cost: 0, orders: 0 },
-              'webpay': { icon: 'credit-card', label: 'Webpay', sales: 0, cost: 0, orders: 0 },
-              'pedidosya': { icon: 'bike', label: 'PedidosYA', sales: 0, cost: 0, orders: 0 },
-              'rl6_credit': { icon: 'credit-card', label: 'Crédito RL6', sales: 0, cost: 0, orders: 0 }
-            };
-            
-            let totalCost = 0;
-            let totalDeliveryFee = 0;
-            
-            tuuAllTransactions.forEach(t => {
-              const method = t.payment_method || 'cash';
-              const amount = parseFloat(t.amount || 0);
-              const deliveryFee = parseFloat(t.delivery_fee || 0);
-              const netAmount = amount - deliveryFee;
-              
-              // Calcular costo real desde items
-              let realCost = 0;
-              if (t.items && t.items.length > 0) {
-                t.items.forEach(item => {
-                  realCost += parseFloat(item.item_cost || 0) * parseFloat(item.quantity || 1);
-                });
-              } else {
-                realCost = netAmount * 0.35; // Fallback 35%
-              }
-              
-              if (paymentMethods[method]) {
-                paymentMethods[method].sales += netAmount;
-                paymentMethods[method].cost += realCost;
-                paymentMethods[method].orders += 1;
-              }
-              
-              totalCost += realCost;
-              totalDeliveryFee += deliveryFee;
-            });
-            
-            const totalSales = stats.total_revenue || 0;
-            const totalSalesNet = totalSales - totalDeliveryFee;
-            const totalProfit = totalSalesNet - totalCost;
-            
-            // Actualizar estadísticas generales
-            const totalSalesEl = document.getElementById('tuu-total-sales');
-            const deliveryDiscountEl = document.getElementById('tuu-delivery-discount');
-            const totalCostEl = document.getElementById('tuu-total-cost');
-            const totalProfitEl = document.getElementById('tuu-total-profit');
-            const transactionsCountEl = document.getElementById('tuu-transactions-count');
-            const lastUpdateEl = document.getElementById('tuu-last-update');
-            
-            if (totalSalesEl) totalSalesEl.textContent = '$' + new Intl.NumberFormat('es-CL').format(totalSalesNet);
-            if (deliveryDiscountEl) {
-              if (totalDeliveryFee > 0) {
-                deliveryDiscountEl.textContent = `(-$${new Intl.NumberFormat('es-CL').format(totalDeliveryFee)} delivery)`;
-              } else {
-                deliveryDiscountEl.textContent = '';
-              }
-            }
-            if (totalCostEl) totalCostEl.textContent = '$' + new Intl.NumberFormat('es-CL', {maximumFractionDigits: 0}).format(totalCost);
-            if (totalProfitEl) totalProfitEl.textContent = '$' + new Intl.NumberFormat('es-CL', {maximumFractionDigits: 0}).format(totalProfit);
-            if (transactionsCountEl) {
-              const totalOrders = stats.total_transactions || 0;
-              transactionsCountEl.textContent = totalOrders;
-              const labelEl = document.getElementById('tuu-transactions-label');
-              if (labelEl && totalOrders > 0 && tuuAllTransactions.length > 0) {
-                const dates = tuuAllTransactions.map(t => new Date(t.created_at || t.payment_date_time).getTime());
-                const minDate = Math.min(...dates);
-                const maxDate = Math.max(...dates);
-                const daysDiff = Math.max(1, Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1);
-                const ordersPerDay = (totalOrders / daysDiff).toFixed(1);
-                labelEl.innerHTML = `<i data-lucide="receipt" style="width: 14px; height: 14px;"></i> ${totalOrders} / ${daysDiff}d = ${ordersPerDay}/día`;
-                if (typeof lucide !== 'undefined') lucide.createIcons();
-              }
-            }
-            if (lastUpdateEl) {
-              const now = new Date();
-              lastUpdateEl.textContent = now.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            }
-            
-            // Renderizar desglose por método de pago
-            const paymentMethodsGrid = document.getElementById('payment-methods-grid');
-            if (paymentMethodsGrid) {
-              paymentMethodsGrid.innerHTML = Object.entries(paymentMethods).map(([key, data]) => {
-                const profit = data.sales - data.cost;
-                const profitPercent = data.sales > 0 ? ((profit / data.sales) * 100).toFixed(1) : 0;
-                return `
-                  <div class="stat-card" style="border-left: 4px solid ${data.sales > 0 ? '#10b981' : '#e5e5e5'};">
-                    <div style="font-size: clamp(1.25rem, 3vw, 1.5rem); font-weight: 700; color: #059669; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
-                      <i data-lucide="${data.icon}" style="width: 20px; height: 20px;"></i> $${new Intl.NumberFormat('es-CL').format(data.sales)}
-                    </div>
-                    <div style="font-size: clamp(0.75rem, 1.8vw, 0.875rem); color: #666; margin-bottom: 8px;">
-                      ${data.label}
-                    </div>
-                    <div style="font-size: clamp(0.7rem, 1.5vw, 0.8rem); color: #999; margin-bottom: 2px; display: flex; align-items: center; gap: 4px;">
-                      <i data-lucide="package" style="width: 12px; height: 12px;"></i> Costo: $${new Intl.NumberFormat('es-CL', {maximumFractionDigits: 0}).format(data.cost)}
-                    </div>
-                    <div style="font-size: clamp(0.7rem, 1.5vw, 0.8rem); color: #0284c7; margin-bottom: 2px; display: flex; align-items: center; gap: 4px;">
-                      <i data-lucide="trending-up" style="width: 12px; height: 12px;"></i> Utilidad: $${new Intl.NumberFormat('es-CL', {maximumFractionDigits: 0}).format(profit)} (${profitPercent}%)
-                    </div>
-                    <div style="font-size: clamp(0.7rem, 1.5vw, 0.8rem); color: #666; display: flex; align-items: center; gap: 4px;">
-                      <i data-lucide="receipt" style="width: 12px; height: 12px;"></i> ${data.orders} pedidos
-                    </div>
-                  </div>
-                `;
-              }).join('');
-              
-              // Agregar tarjeta de delivery si hay fees
-              if (totalDeliveryFee > 0) {
-                paymentMethodsGrid.innerHTML += `
-                  <div class="stat-card" style="border-left: 4px solid #f59e0b;">
-                    <div style="font-size: clamp(1.25rem, 3vw, 1.5rem); font-weight: 700; color: #f59e0b; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
-                      <i data-lucide="bike" style="width: 20px; height: 20px;"></i> $${new Intl.NumberFormat('es-CL').format(totalDeliveryFee)}
-                    </div>
-                    <div style="font-size: clamp(0.75rem, 1.8vw, 0.875rem); color: #666;">
-                      Delivery (Rider)
-                    </div>
-                  </div>
-                `;
-              }
-              
-              if (typeof lucide !== 'undefined') lucide.createIcons();
-            }
-            
-            // Inicializar filtros y paginación - USAR TARJETAS SIEMPRE
-            tuuCurrentPage = 1;
-            renderAllAsCards();
-            
-            if (contentEl) contentEl.style.display = 'block';
+            processTransactionsData(stats, tuuAllTransactions, isFirstLoad, contentEl);
           } else {
             if (errorEl) {
               errorEl.textContent = 'Error: ' + (data.error || 'No se pudieron cargar los reportes');
