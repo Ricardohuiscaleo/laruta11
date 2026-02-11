@@ -112,8 +112,8 @@ func main() {
 	r.POST("/api/notifications/admin", s.notifyAdmin)
 	r.GET("/api/trucks", s.getTrucks)
 	r.POST("/api/trucks", s.getTrucks)
-	r.GET("/api/trucks/status", s.getTrucks)
-	r.GET("/api/trucks/schedules", s.getTrucks)
+	r.GET("/api/trucks/status", s.getTruckStatus)
+	r.GET("/api/trucks/schedules", s.getTruckSchedules)
 	r.PUT("/api/trucks/:id", s.updateTruck)
 	r.POST("/api/trucks/status", s.updateTruck)
 	r.POST("/api/trucks/config", s.updateTruck)
@@ -134,6 +134,10 @@ func main() {
 	r.PUT("/api/comandas/:id/status", s.updateComandaStatus)
 	r.POST("/api/track/visit", s.trackVisit)
 	r.POST("/api/track/interaction", s.trackInteraction)
+
+	// Arqueo
+	r.GET("/api/get_sales_summary.php", s.getSalesSummary)
+	r.GET("/api/get_saldo_caja.php", s.getSaldoCaja)
 
 	port := os.Getenv("PORT")
 	if port == "" {

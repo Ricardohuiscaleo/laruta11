@@ -293,3 +293,68 @@ func (s *Server) deleteUser(c *gin.Context) {
 func (s *Server) trackUsage(c *gin.Context) {
 	c.JSON(200, gin.H{"success": true})
 }
+
+func (s *Server) getTruckStatus(c *gin.Context) {
+	truckID := c.Query("truckId")
+	if truckID == "" {
+		c.JSON(400, gin.H{"success": false, "error": "truckId required"})
+		return
+	}
+	
+	var id, active int
+	var nombre, direccion string
+	err := s.DB.QueryRow(`SELECT id, nombre, activo, direccion FROM food_trucks WHERE id = ?`, truckID).Scan(&id, &nombre, &active, &direccion)
+	if err != nil {
+		c.JSON(404, gin.H{"success": false, "error": "Truck not found"})
+		return
+	}
+	
+	c.JSON(200, gin.H{
+		"success": true,
+		"truck": map[string]interface{}{
+			"id":        id,
+			"nombre":    nombre,
+			"is_active": active == 1,
+			"direccion": direccion,
+		},
+	})
+}
+
+func (s *Server) getTruckSchedules(c *gin.Context) {
+	truckID := c.Query("truckId")
+	if truckID == "" {
+		c.JSON(400, gin.H{"success": false, "error": "truckId required"})
+		return
+	}
+	
+	rows, err := s.DB.Query(`SELECT day_of_week, horario_inicio, horario_fin FROM food_truck_schedules WHERE truck_id = ? ORDER BY day_of_week`, truckID)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	defer rows.Close()
+	
+	schedules := []map[string]interface{}{}
+	for rows.Next() {
+		var dayOfWeek int
+		var horarioInicio, horarioFin string
+		rows.Scan(&dayOfWeek, &horarioInicio, &horarioFin)
+		schedules = append(schedules, map[string]interface{}{
+			"day_of_week":     dayOfWeek,
+			"horario_inicio":  horarioInicio,
+			"horario_fin":     horarioFin,
+		})
+	}
+	
+	now := time.Now()
+	currentDayOfWeek := int(now.Weekday())
+	if currentDayOfWeek == 0 {
+		currentDayOfWeek = 7
+	}
+	
+	c.JSON(200, gin.H{
+		"success":          true,
+		"schedules":        schedules,
+		"currentDayOfWeek": currentDayOfWeek,
+	})
+}
