@@ -6790,16 +6790,21 @@
       }).join('');
     };
     
-    // Inicializar después de cargar
-    fetch('/api/check_admin_auth.php')
-      .then(r => r.json())
-      .then(data => {
-        if (!data.authenticated) window.location.href = '/admin/login';
+    // Inicializar después de cargar - Verificar sesión de admin
+    const adminSession = localStorage.getItem('admin_session');
+    if (!adminSession) {
+      window.location.href = '/admin/login';
+    } else {
+      try {
+        const session = JSON.parse(adminSession);
         const usernameEl = document.getElementById('username');
-        if (usernameEl) usernameEl.textContent = data.user;
+        if (usernameEl) usernameEl.textContent = session.user || 'Admin';
         showView('dashboard');
-        
-      });
+      } catch (e) {
+        console.error('Error parsing admin session:', e);
+        window.location.href = '/admin/login';
+      }
+    }
   </script>
 </body>
 </html>

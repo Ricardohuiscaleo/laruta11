@@ -129,12 +129,11 @@
   <script>
     let interactionsChart, clicksChart;
     
-    // Verificar auth
-    fetch('/api/check_admin_auth.php')
-      .then(r => r.json())
-      .then(data => {
-        if (!data.authenticated) window.location.href = '/admin/login';
-      });
+    // Verificar auth con localStorage
+    const adminSession = localStorage.getItem('admin_session');
+    if (!adminSession) {
+      window.location.href = '/admin/login';
+    }
     
     // Cargar datos de comportamiento
     async function loadAnalytics() {

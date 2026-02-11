@@ -196,13 +196,13 @@
         });
     }
     
-    // Verificar auth y cargar analytics
-    fetch('/api/check_admin_auth.php')
-      .then(r => r.json())
-      .then(data => {
-        if (!data.authenticated) window.location.href = '/admin/login';
-        else loadAnalytics();
-      });
+    // Verificar auth con localStorage
+    const adminSession = localStorage.getItem('admin_session');
+    if (!adminSession) {
+      window.location.href = '/admin/login';
+    } else {
+      loadAnalytics();
+    }
     
     // Auto-refresh cada 30 segundos
     setInterval(loadAnalytics, 30000);

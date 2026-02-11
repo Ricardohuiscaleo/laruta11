@@ -174,12 +174,11 @@
   </div>
   
   <script>
-    // Verificar autenticación
-    fetch('/api/check_admin_auth.php')
-      .then(r => r.json())
-      .then(data => {
-        if (!data.authenticated) window.location.href = '/admin/login';
-      });
+    // Verificar autenticación con localStorage
+    const adminSession = localStorage.getItem('admin_session');
+    if (!adminSession) {
+      window.location.href = '/admin/login';
+    }
     
     // Cargar configuración inicial
     document.addEventListener('DOMContentLoaded', function() {
