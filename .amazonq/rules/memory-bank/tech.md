@@ -63,8 +63,22 @@ npm run preview    # Preview production build
 ## Database
 
 ### Technology
-- **MySQL**: Relational database
-- **PDO**: PHP database abstraction layer
+- **MySQL 9.6**: Relational database (migrated from Hostinger to VPS)
+- **Host**: `websites_mysql-laruta11` (internal) or `76.13.126.63:3306` (external)
+- **Database**: `laruta11`
+- **User**: `laruta11_user`
+- **Connection**: Direct MySQL connections via Go `database/sql` or PHP PDO
+
+### Database Management Tools
+- **Beekeeper Studio** (recommended): Modern, free, native M1 support
+  - Download: https://www.beekeeperstudio.io/
+  - Fast, clean UI, multiple tabs, dark mode
+- **TablePlus** (premium): Fastest option, $89 lifetime
+  - Download: https://tableplus.com/
+  - Native M1, best performance
+- **Adminer** (web): Lightweight phpMyAdmin alternative
+  - Single PHP file, can deploy on VPS
+- **phpMyAdmin** (legacy): Avoid, slow and outdated
 
 ### Key Tables
 - productos, ingredientes, recetas

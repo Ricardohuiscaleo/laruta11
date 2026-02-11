@@ -21,7 +21,7 @@ func (s *Server) authLogin(c *gin.Context) {
 	valid, role := false, ""
 	switch req.Type {
 	case "caja":
-		if (req.User == "ruta11caja" && req.Pass == os.Getenv("CAJA_USER_CAJERA")) || (req.User == "admin123" && req.Pass == os.Getenv("CAJA_USER_ADMIN")) {
+		if (req.User == os.Getenv("CAJA_USER_CAJERA") && req.Pass == os.Getenv("CAJA_PASSWORD_CAJERA")) || (req.User == os.Getenv("CAJA_USER_ADMIN") && req.Pass == os.Getenv("CAJA_PASSWORD_ADMIN")) {
 			valid, role = true, "caja"
 		}
 	case "inventario":
@@ -259,7 +259,11 @@ func (s *Server) deleteIngrediente(c *gin.Context) {
 
 // GET /api/categories (8 usos + 4 usos = 12 usos)
 func (s *Server) getCategories(c *gin.Context) {
-	rows, _ := s.DB.Query(`SELECT id, name, is_active, display_order FROM categories ORDER BY display_order, name`)
+	rows, err := s.DB.Query(`SELECT id, name, is_active, display_order FROM categories ORDER BY display_order, name`)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
 	defer rows.Close()
 
 	cats := []map[string]interface{}{}
@@ -298,7 +302,11 @@ func (s *Server) deleteCategory(c *gin.Context) {
 // GET /api/checklist (4 usos)
 func (s *Server) getChecklists(c *gin.Context) {
 	date := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
-	rows, _ := s.DB.Query(`SELECT id, date, type, items, completed FROM checklists WHERE date = ? ORDER BY type`, date)
+	rows, err := s.DB.Query(`SELECT id, date, type, items, completed FROM checklists WHERE date = ? ORDER BY type`, date)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
 	defer rows.Close()
 
 	chs := []map[string]interface{}{}
@@ -395,7 +403,11 @@ func (s *Server) getProductByID(c *gin.Context) {
 
 // GET /api/orders/pending
 func (s *Server) getPendingOrders(c *gin.Context) {
-	rows, _ := s.DB.Query(`SELECT id, order_number, customer_data, items_data, total_amount, order_status FROM tuu_orders WHERE order_status IN ('pending', 'preparing') ORDER BY created_at DESC`)
+	rows, err := s.DB.Query(`SELECT id, order_number, customer_data, items_data, total_amount, order_status FROM tuu_orders WHERE order_status IN ('pending', 'preparing') ORDER BY created_at DESC`)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
 	defer rows.Close()
 
 	orders := []map[string]interface{}{}
