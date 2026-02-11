@@ -39,7 +39,7 @@ export default function ArqueoApp() {
   const loadSalesData = async (daysAgo = 0) => {
     if (salesData) setIsTransitioning(true);
     try {
-      const url = daysAgo > 0 ? `/api/get_sales_summary.php?days_ago=${daysAgo}&v=${Date.now()}` : `/api/get_sales_summary.php?v=${Date.now()}`;
+      const url = daysAgo > 0 ? `/api/sales/summary?days_ago=${daysAgo}&v=${Date.now()}` : `/api/sales/summary?v=${Date.now()}`;
       const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
       const data = await response.json();
       if (data.success) {
@@ -56,7 +56,7 @@ export default function ArqueoApp() {
 
   const loadSaldoCaja = async () => {
     try {
-      const response = await fetch('/api/get_saldo_caja.php');
+      const response = await fetch('/api/caja/saldo');
       const data = await response.json();
       if (data.success) {
         setSaldoCaja(data.saldo_actual);

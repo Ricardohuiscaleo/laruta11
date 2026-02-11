@@ -136,8 +136,8 @@ func main() {
 	r.POST("/api/track/interaction", s.trackInteraction)
 
 	// Arqueo
-	r.GET("/api/get_sales_summary.php", s.getSalesSummary)
-	r.GET("/api/get_saldo_caja.php", s.getSaldoCaja)
+	r.GET("/api/sales/summary", s.getSalesSummary)
+	r.GET("/api/caja/saldo", s.getSaldoCaja)
 
 	port := os.Getenv("PORT")
 	if port == "" {
