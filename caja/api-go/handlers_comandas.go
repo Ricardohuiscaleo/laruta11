@@ -20,20 +20,20 @@ func (s *Server) getComandas(c *gin.Context) {
 	date := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
 	
 	query := `
-		SELECT o.id, o.order_number, o.customer_name, o.customer_phone,
-			o.customer_data, o.installment_amount, o.order_status, o.payment_status,
-			o.payment_method, o.delivery_type, o.created_at
-		FROM tuu_orders o
-		WHERE DATE(o.created_at) = ?`
+		SELECT id, order_number, customer_name, customer_phone,
+			installment_amount, order_status, payment_status,
+			payment_method, delivery_type, created_at
+		FROM tuu_orders
+		WHERE DATE(created_at) = ?`
 	
 	params := []interface{}{date}
 	
 	if status != "all" {
-		query += " AND o.order_status = ?"
+		query += " AND order_status = ?"
 		params = append(params, status)
 	}
 	
-	query += " ORDER BY o.created_at DESC LIMIT 100"
+	query += " ORDER BY created_at DESC LIMIT 100"
 	
 	rows, err := s.DB.Query(query, params...)
 	if err != nil {
@@ -45,23 +45,57 @@ func (s *Server) getComandas(c *gin.Context) {
 	comandas := []map[string]interface{}{}
 	for rows.Next() {
 		var id int
-		var orderNum, customerName, customerPhone, customerData, orderStatus, paymentStatus, paymentMethod, deliveryType, createdAt string
+		var orderNum, customerName, customerPhone, orderStatus, paymentStatus, paymentMethod, deliveryType, createdAt string
 		var amount float64
 		
-		if err := rows.Scan(&id, &orderNum, &customerName, &customerPhone, &customerData, &amount, &orderStatus, &paymentStatus, &paymentMethod, &deliveryType, &createdAt); err != nil {
+		if err := rows.Scan(&id, &orderNum, &customerName, &customerPhone, &amount, &orderStatus, &paymentStatus, &paymentMethod, &deliveryType, &createdAt); err != nil {
 			c.JSON(500, gin.H{"success": false, "error": "Row scan failed: " + err.Error()})
 			return
 		}
 		
-		var items []interface{}
-		if customerData != "" && customerData != "null" {
-			var data map[string]interface{}
-			if err := json.Unmarshal([]byte(customerData), &data); err == nil {
-				if cart, ok := data["cart_items"].([]interface{}); ok {
-					items = cart
-				}
+		// Obtener items desde tuu_order_items
+		itemsQuery := `
+			SELECT product_id, product_name, quantity, product_price, item_type
+			FROM tuu_order_items
+			WHERE order_id = ?`
+		
+		itemsRows, err := s.DB.Query(itemsQuery, id)
+		if err != nil {
+			items := []interface{}{}
+			comandas = append(comandas, map[string]interface{}{
+				"id":             id,
+				"order_number":   orderNum,
+				"customer_name":  customerName,
+				"customer_phone": customerPhone,
+				"items":          items,
+				"total":          amount,
+				"order_status":   orderStatus,
+				"payment_status": paymentStatus,
+				"payment_method": paymentMethod,
+				"delivery_type":  deliveryType,
+				"created_at":     createdAt,
+			})
+			continue
+		}
+		
+		items := []map[string]interface{}{}
+		for itemsRows.Next() {
+			var productID int
+			var productName, itemType string
+			var quantity int
+			var price float64
+			
+			if err := itemsRows.Scan(&productID, &productName, &quantity, &price, &itemType); err == nil {
+				items = append(items, map[string]interface{}{
+					"product_id":   productID,
+					"product_name": productName,
+					"quantity":     quantity,
+					"price":        price,
+					"item_type":    itemType,
+				})
 			}
 		}
+		itemsRows.Close()
 		
 		comandas = append(comandas, map[string]interface{}{
 			"id":             id,
