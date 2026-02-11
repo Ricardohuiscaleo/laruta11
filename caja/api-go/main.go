@@ -74,6 +74,13 @@ func main() {
 	// Dashboard (consolidado - 8 endpoints PHP → 1 endpoint Go con goroutines)
 	r.GET("/api/dashboard", s.getDashboard)
 
+	// Dashboard individual endpoints
+	r.GET("/api/get_dashboard_analytics.php", s.getDashboardAnalytics)
+	r.GET("/api/get_dashboard_cards.php", s.getDashboardCards)
+	r.GET("/api/get_sales_analytics.php", s.getSalesAnalytics)
+	r.GET("/api/get_month_comparison.php", s.getMonthComparison)
+	r.GET("/api/get_financial_reports.php", s.getFinancialReports)
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3002"

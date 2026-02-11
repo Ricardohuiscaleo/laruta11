@@ -601,3 +601,90 @@ func (s *Server) queryAnalytics() gin.H {
 		"products": gin.H{"total": totalProducts},
 	}
 }
+
+// ========== DASHBOARD ENDPOINTS (5 PHP → 5 Go) ==========
+
+// GET /api/get_dashboard_analytics.php
+func (s *Server) getDashboardAnalytics(c *gin.Context) {
+	var totalOrders, totalUsers, totalProducts int
+	var totalRevenue float64
+	s.DB.QueryRow(`SELECT COUNT(*) FROM tuu_orders WHERE payment_status='paid'`).Scan(&totalOrders)
+	s.DB.QueryRow(`SELECT COALESCE(SUM(installment_amount),0) FROM tuu_orders WHERE payment_status='paid'`).Scan(&totalRevenue)
+	s.DB.QueryRow(`SELECT COUNT(*) FROM app_users`).Scan(&totalUsers)
+	s.DB.QueryRow(`SELECT COUNT(*) FROM products WHERE is_active=1`).Scan(&totalProducts)
+	
+	c.JSON(200, gin.H{"success": true, "data": gin.H{"total_orders": totalOrders, "total_revenue": totalRevenue, "total_users": totalUsers, "total_products": totalProducts}})
+}
+
+// GET /api/get_dashboard_cards.php
+func (s *Server) getDashboardCards(c *gin.Context) {
+	var ordersToday, ordersMonth int
+	var revenueToday, revenueMonth float64
+	today := time.Now().Format("2006-01-02")
+	s.DB.QueryRow(`SELECT COUNT(*), COALESCE(SUM(installment_amount),0) FROM tuu_orders WHERE DATE(created_at)=? AND payment_status='paid'`, today).Scan(&ordersToday, &revenueToday)
+	s.DB.QueryRow(`SELECT COUNT(*), COALESCE(SUM(installment_amount),0) FROM tuu_orders WHERE MONTH(created_at)=MONTH(NOW()) AND payment_status='paid'`).Scan(&ordersMonth, &revenueMonth)
+	
+	c.JSON(200, gin.H{"success": true, "orders_today": ordersToday, "revenue_today": revenueToday, "orders_month": ordersMonth, "revenue_month": revenueMonth})
+}
+
+// GET /api/get_sales_analytics.php?period=month
+func (s *Server) getSalesAnalytics(c *gin.Context) {
+	period := c.DefaultQuery("period", "month")
+	var dateFilter string
+	if period == "day" {
+		dateFilter = "DATE(created_at)=CURDATE()"
+	} else if period == "week" {
+		dateFilter = "YEARWEEK(created_at)=YEARWEEK(NOW())"
+	} else {
+		dateFilter = "MONTH(created_at)=MONTH(NOW())"
+	}
+	
+	rows, _ := s.DB.Query(`SELECT DATE(created_at) as date, COUNT(*) as orders, COALESCE(SUM(installment_amount),0) as revenue FROM tuu_orders WHERE `+dateFilter+` AND payment_status='paid' GROUP BY DATE(created_at) ORDER BY date`)
+	defer rows.Close()
+	
+	data := []gin.H{}
+	for rows.Next() {
+		var date string
+		var orders int
+		var revenue float64
+		rows.Scan(&date, &orders, &revenue)
+		data = append(data, gin.H{"date": date, "orders": orders, "revenue": revenue})
+	}
+	c.JSON(200, gin.H{"success": true, "period": period, "data": data})
+}
+
+// GET /api/get_month_comparison.php
+func (s *Server) getMonthComparison(c *gin.Context) {
+	var currentMonth, previousMonth float64
+	s.DB.QueryRow(`SELECT COALESCE(SUM(installment_amount),0) FROM tuu_orders WHERE MONTH(created_at)=MONTH(NOW()) AND payment_status='paid'`).Scan(&currentMonth)
+	s.DB.QueryRow(`SELECT COALESCE(SUM(installment_amount),0) FROM tuu_orders WHERE MONTH(created_at)=MONTH(NOW())-1 AND payment_status='paid'`).Scan(&previousMonth)
+	
+	growth := 0.0
+	if previousMonth > 0 {
+		growth = ((currentMonth - previousMonth) / previousMonth) * 100
+	}
+	c.JSON(200, gin.H{"success": true, "current_month": currentMonth, "previous_month": previousMonth, "growth": growth})
+}
+
+// GET /api/get_financial_reports.php
+func (s *Server) getFinancialReports(c *gin.Context) {
+	rows, _ := s.DB.Query(`
+		SELECT DATE_FORMAT(created_at, '%Y-%m') as month, 
+			COUNT(*) as orders, 
+			COALESCE(SUM(installment_amount),0) as revenue,
+			COALESCE(SUM(delivery_fee),0) as delivery_fees
+		FROM tuu_orders 
+		WHERE payment_status='paid' AND created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+		GROUP BY month ORDER BY month DESC`)
+	defer rows.Close()
+	
+	reports := []gin.H{}
+	for rows.Next() {
+		var month string
+		var orders int
+		var revenue, fees float64
+		rows.Scan(&month, &orders, &revenue, &fees)
+		reports = append(reports, gin.H{"month": month, "orders": orders, "revenue": revenue, "delivery_fees": fees, "net_revenue": revenue - fees})
+	}
+	c.JSON(200, gin.H{"success": true, "reports": reports})
+}
