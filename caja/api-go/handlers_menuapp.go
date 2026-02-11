@@ -15,8 +15,9 @@ import (
 func (s *Server) getMenu(c *gin.Context) {
 	activeOnly := c.DefaultQuery("active_only", "1") == "1"
 	query := `
-		SELECT p.id, p.name, p.description, p.price, p.image_url, p.stock_quantity, 
-			p.is_active, p.likes, c.name as category_name, c.id as category_id
+		SELECT p.id, p.name, COALESCE(p.description,''), p.price, COALESCE(p.image_url,''), 
+			COALESCE(p.stock_quantity,0), p.is_active, COALESCE(p.likes,0), 
+			COALESCE(c.name,'Sin categoría'), COALESCE(c.id,0)
 		FROM products p
 		LEFT JOIN categories c ON p.category_id = c.id`
 	
@@ -25,7 +26,11 @@ func (s *Server) getMenu(c *gin.Context) {
 	}
 	query += " ORDER BY c.display_order, p.name"
 	
-	rows, _ := s.DB.Query(query)
+	rows, err := s.DB.Query(query)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
 	defer rows.Close()
 	
 	menu := map[string][]map[string]interface{}{}
@@ -33,7 +38,9 @@ func (s *Server) getMenu(c *gin.Context) {
 		var id, catID, stock, likes, active int
 		var name, desc, img, catName string
 		var price float64
-		rows.Scan(&id, &name, &desc, &price, &img, &stock, &active, &likes, &catName, &catID)
+		if err := rows.Scan(&id, &name, &desc, &price, &img, &stock, &active, &likes, &catName, &catID); err != nil {
+			continue
+		}
 		
 		if _, ok := menu[catName]; !ok {
 			menu[catName] = []map[string]interface{}{}
