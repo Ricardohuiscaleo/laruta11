@@ -29,11 +29,18 @@ func (s *Server) authLogin(c *gin.Context) {
 			valid, role = true, "inventario"
 		}
 	case "comandas":
-		if req.User == "comandas" && req.Pass == os.Getenv("CAJA_USER_CAJERA") {
+		if req.User == os.Getenv("COMANDAS_USER") && req.Pass == os.Getenv("COMANDAS_PASSWORD") {
 			valid, role = true, "comandas"
 		}
 	case "admin":
-		if (req.User == "admin" && req.Pass == os.Getenv("ADMIN_USER_ADMIN")) || (req.User == "ricardo" && req.Pass == os.Getenv("ADMIN_USER_RICARDO")) || (req.User == "manager" && req.Pass == os.Getenv("ADMIN_USER_MANAGER")) || (req.User == "ruta11" && req.Pass == os.Getenv("ADMIN_USER_RUTA11")) {
+		// Validar contra múltiples usuarios admin desde variables de entorno
+		adminUsers := map[string]string{
+			os.Getenv("ADMIN_USER_ADMIN"):   os.Getenv("ADMIN_PASSWORD_ADMIN"),
+			os.Getenv("ADMIN_USER_RICARDO"): os.Getenv("ADMIN_PASSWORD_RICARDO"),
+			os.Getenv("ADMIN_USER_MANAGER"): os.Getenv("ADMIN_PASSWORD_MANAGER"),
+			os.Getenv("ADMIN_USER_RUTA11"):  os.Getenv("ADMIN_PASSWORD_RUTA11"),
+		}
+		if expectedPass, exists := adminUsers[req.User]; exists && expectedPass != "" && req.Pass == expectedPass {
 			valid, role = true, "admin"
 		}
 	}

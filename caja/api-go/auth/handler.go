@@ -31,12 +31,6 @@ func (h *Handler) Login(c *gin.Context) {
 			valid, role = true, "comandas"
 		}
 	case "admin":
-		// DEBUG: Log environment variables
-		println("DEBUG: ADMIN_USER_ADMIN =", os.Getenv("ADMIN_USER_ADMIN"))
-		println("DEBUG: ADMIN_PASSWORD_ADMIN =", os.Getenv("ADMIN_PASSWORD_ADMIN"))
-		println("DEBUG: Request user =", req.User)
-		println("DEBUG: Request pass =", req.Pass)
-
 		// Validar contra múltiples usuarios admin desde variables de entorno
 		adminUsers := map[string]string{
 			os.Getenv("ADMIN_USER_ADMIN"):   os.Getenv("ADMIN_PASSWORD_ADMIN"),
@@ -45,14 +39,9 @@ func (h *Handler) Login(c *gin.Context) {
 			os.Getenv("ADMIN_USER_RUTA11"):  os.Getenv("ADMIN_PASSWORD_RUTA11"),
 		}
 
-		println("DEBUG: adminUsers map =", adminUsers)
-
 		// Verificar si el usuario existe y la contraseña coincide
 		if expectedPass, exists := adminUsers[req.User]; exists && expectedPass != "" && req.Pass == expectedPass {
 			valid, role = true, "admin"
-			println("DEBUG: Login successful")
-		} else {
-			println("DEBUG: Login failed - exists:", exists, "expectedPass:", expectedPass)
 		}
 	}
 	if valid {
