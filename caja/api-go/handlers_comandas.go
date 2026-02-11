@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,10 @@ import (
 
 // GET /api/comandas?status=pending&date=2026-02-10
 func (s *Server) getComandas(c *gin.Context) {
+	if s.DB == nil {
+		c.JSON(200, gin.H{"success": true, "comandas": []interface{}{}, "total": 0})
+		return
+	}
 	status := c.DefaultQuery("status", "all")
 	date := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
 	
@@ -28,11 +33,11 @@ func (s *Server) getComandas(c *gin.Context) {
 		params = append(params, status)
 	}
 	
-	query += " ORDER BY o.created_at DESC"
+	query += " ORDER BY o.created_at DESC LIMIT 100"
 	
 	rows, err := s.DB.Query(query, params...)
 	if err != nil {
-		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		c.JSON(500, gin.H{"success": false, "error": "DB query failed: " + err.Error()})
 		return
 	}
 	defer rows.Close()
@@ -44,12 +49,15 @@ func (s *Server) getComandas(c *gin.Context) {
 		var amount float64
 		
 		if err := rows.Scan(&id, &orderNum, &customerName, &customerPhone, &itemsData, &amount, &orderStatus, &paymentStatus, &paymentMethod, &deliveryType, &createdAt); err != nil {
-			continue
+			c.JSON(500, gin.H{"success": false, "error": "Row scan failed: " + err.Error()})
+			return
 		}
 		
 		var items []interface{}
-		if itemsData != "" {
-			json.Unmarshal([]byte(itemsData), &items)
+		if itemsData != "" && itemsData != "null" {
+			if err := json.Unmarshal([]byte(itemsData), &items); err != nil {
+				items = []interface{}{}
+			}
 		}
 		
 		comandas = append(comandas, map[string]interface{}{
@@ -92,14 +100,44 @@ func (s *Server) trackVisit(c *gin.Context) {
 	
 	ip := c.ClientIP()
 	userAgent := c.GetHeader("User-Agent")
+	pageURL := req["page_url"]
+	if pageURL == nil {
+		pageURL = "https://app.laruta11.cl"
+	}
+	referrer := c.GetHeader("Referer")
+	sessionID := req["session_id"]
+	
+	// Detect device
+	deviceType := "desktop"
+	if strings.Contains(userAgent, "Mobile") || strings.Contains(userAgent, "Android") || strings.Contains(userAgent, "iPhone") {
+		deviceType = "mobile"
+	}
+	if strings.Contains(userAgent, "iPad") {
+		deviceType = "tablet"
+	}
+	
+	// Detect browser
+	browser := "Unknown"
+	if strings.Contains(userAgent, "Chrome") {
+		browser = "Chrome"
+	} else if strings.Contains(userAgent, "Firefox") {
+		browser = "Firefox"
+	} else if strings.Contains(userAgent, "Safari") {
+		browser = "Safari"
+	} else if strings.Contains(userAgent, "Edge") {
+		browser = "Edge"
+	}
 	
 	s.DB.Exec(`
-		INSERT INTO site_visits (ip_address, user_agent, page_url, visit_date, metadata)
-		VALUES (?, ?, ?, CURDATE(), ?)
-		ON DUPLICATE KEY UPDATE visit_count = visit_count + 1`,
-		ip, userAgent, req["page"], req["metadata"])
+		INSERT INTO site_visits 
+		(ip_address, user_agent, page_url, referrer, session_id, visit_date, device_type, browser, 
+		 latitude, longitude, screen_resolution, viewport_size, timezone, language, platform)
+		VALUES (?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		ip, userAgent, pageURL, referrer, sessionID, deviceType, browser,
+		req["latitude"], req["longitude"], req["screen_resolution"], 
+		req["viewport_size"], req["timezone"], req["language"], req["platform"])
 	
-	c.JSON(200, gin.H{"success": true})
+	c.JSON(200, gin.H{"success": true, "message": "Visit tracked"})
 }
 
 // POST /api/track/interaction
@@ -107,24 +145,40 @@ func (s *Server) trackInteraction(c *gin.Context) {
 	var req map[string]interface{}
 	c.BindJSON(&req)
 	
-	s.DB.Exec(`
-		INSERT INTO user_interactions (user_id, action_type, product_id, metadata, timestamp)
-		VALUES (?, ?, ?, ?, NOW())`,
-		req["user_id"], req["action_type"], req["product_id"], req["metadata"])
-	
-	// Actualizar analytics de producto si aplica
-	if req["product_id"] != nil && req["action_type"] == "view" {
-		s.DB.Exec(`
-			INSERT INTO product_analytics (product_id, product_name, views_count)
-			VALUES (?, ?, 1)
-			ON DUPLICATE KEY UPDATE views_count = views_count + 1`,
-			req["product_id"], req["product_name"])
+	ip := c.ClientIP()
+	actionType := req["action_type"]
+	if actionType == nil {
+		actionType = "click"
 	}
 	
-	if req["product_id"] != nil && req["action_type"] == "click" {
-		s.DB.Exec(`
-			UPDATE product_analytics SET clicks_count = clicks_count + 1
-			WHERE product_id = ?`, req["product_id"])
+	s.DB.Exec(`
+		INSERT INTO user_interactions 
+		(session_id, user_ip, action_type, element_type, element_id, element_text, product_id, category_id, page_url)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		req["session_id"], ip, actionType, req["element_type"], req["element_id"],
+		req["element_text"], req["product_id"], req["category_id"], req["page_url"])
+	
+	// Update product analytics
+	if req["product_id"] != nil {
+		field := ""
+		switch actionType {
+		case "view":
+			field = "views_count"
+		case "click":
+			field = "clicks_count"
+		case "add_to_cart":
+			field = "cart_adds"
+		case "remove_from_cart":
+			field = "cart_removes"
+		}
+		
+		if field != "" {
+			s.DB.Exec(`
+				INSERT INTO product_analytics (product_id, product_name, `+field+`)
+				VALUES (?, ?, 1)
+				ON DUPLICATE KEY UPDATE `+field+` = `+field+` + 1`,
+				req["product_id"], req["product_name"])
+		}
 	}
 	
 	c.JSON(200, gin.H{"success": true})

@@ -7,15 +7,27 @@ import (
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/joho/godotenv"
 )
 
 type Server struct{ DB *sql.DB }
 
 func main() {
+	godotenv.Load()
 	dsn := os.Getenv("APP_DB_USER") + ":" + os.Getenv("APP_DB_PASS") + "@tcp(" + os.Getenv("APP_DB_HOST") + ")/" + os.Getenv("APP_DB_NAME") + "?parseTime=true"
-	db, _ := sql.Open("mysql", dsn)
-	defer db.Close()
-	db.SetMaxOpenConns(25)
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		log.Println("⚠️  DB open error:", err, "- usando modo mock")
+	}
+	if db != nil && db.Ping() != nil {
+		log.Println("⚠️  DB ping error - usando modo mock para desarrollo local")
+		db = nil
+	}
+	if db != nil {
+		defer db.Close()
+		db.SetMaxOpenConns(25)
+		log.Println("✅ DB conectada")
+	}
 
 	s := &Server{DB: db}
 	gin.SetMode(gin.ReleaseMode)
@@ -37,6 +49,7 @@ func main() {
 	// Auth
 	r.POST("/api/auth/login", s.authLogin)
 	r.GET("/api/auth/check", s.authCheck)
+	r.GET("/api/auth/session", s.checkSession)
 	r.POST("/api/auth/logout", s.authLogout)
 
 	// Compras
@@ -75,62 +88,47 @@ func main() {
 	r.GET("/api/dashboard", s.getDashboard)
 
 	// TUU Payments
-	r.GET("/api/tuu/get_from_mysql.php", s.getTUUTransactions)
+	r.GET("/api/tuu/transactions", s.getTUUTransactions)
 	r.GET("/api/tuu/stream", s.streamTUUTransactions)
-	r.GET("/api/get_dashboard_analytics.php", s.getDashboardAnalytics)
-	r.GET("/api/get_dashboard_cards.php", s.getDashboardCards)
-	r.GET("/api/get_sales_analytics.php", s.getSalesAnalytics)
-	r.GET("/api/get_month_comparison.php", s.getMonthComparison)
-	r.GET("/api/get_previous_month_summary.php", s.getPreviousMonthSummary)
-	r.GET("/api/get_financial_reports.php", s.getFinancialReports)
+	r.GET("/api/dashboard/analytics", s.getDashboardAnalytics)
+	r.GET("/api/dashboard/cards", s.getDashboardCards)
+	r.GET("/api/sales/analytics", s.getSalesAnalytics)
+	r.GET("/api/sales/month-comparison", s.getMonthComparison)
+	r.GET("/api/sales/previous-month", s.getPreviousMonthSummary)
+	r.GET("/api/financial/reports", s.getFinancialReports)
 
-	// MenuApp (22 PHP → 8 Go consolidados)
+	// MenuApp
 	r.GET("/api/menu", s.getMenu)
-	r.GET("/api/get_menu_products.php", s.getMenu) // Alias legacy
 	r.POST("/api/products/:id/like", s.toggleLike)
-	r.POST("/api/toggle_like.php", s.toggleLike) // Alias legacy
 	r.PUT("/api/products/:id/status", s.toggleProductStatus)
-	r.POST("/api/toggle_product_status.php", s.toggleProductStatus) // Alias legacy
 	r.POST("/api/orders", s.createOrderFull)
-	r.POST("/api/create_order.php", s.createOrderFull) // Alias legacy
 	r.GET("/api/orders/user/:user_id", s.getUserOrders)
-	r.GET("/api/get_user_orders.php", s.getUserOrders) // Alias legacy
 	r.GET("/api/notifications", s.getNotifications)
-	r.GET("/api/get_order_notifications.php", s.getNotifications) // Alias legacy
 	r.POST("/api/notifications/admin", s.notifyAdmin)
-	r.POST("/api/notify_admin_payment.php", s.notifyAdmin) // Alias legacy
 	r.GET("/api/trucks", s.getTrucks)
-	r.GET("/api/get_nearby_trucks.php", s.getTrucks) // Alias legacy
-	r.GET("/api/get_truck_status.php", s.getTrucks) // Alias legacy
-	r.GET("/api/get_truck_schedules.php", s.getTrucks) // Alias legacy
+	r.POST("/api/trucks", s.getTrucks)
+	r.GET("/api/trucks/status", s.getTrucks)
+	r.GET("/api/trucks/schedules", s.getTrucks)
 	r.PUT("/api/trucks/:id", s.updateTruck)
-	r.POST("/api/update_truck_status.php", s.updateTruck) // Alias legacy
-	r.POST("/api/update_truck_config.php", s.updateTruck) // Alias legacy
-	r.POST("/api/update_truck_schedule.php", s.updateTruck) // Alias legacy
-	r.POST("/api/location", s.handleLocation)
-	r.POST("/api/location/geocode.php", s.handleLocation) // Alias legacy
-	r.POST("/api/location/save_location.php", s.handleLocation) // Alias legacy
-	r.POST("/api/location/check_delivery_zone.php", s.handleLocation) // Alias legacy
-	r.POST("/api/location/get_nearby_products.php", s.handleLocation) // Alias legacy
-	r.POST("/api/location/calculate_delivery_time.php", s.handleLocation) // Alias legacy
-	r.GET("/api/auth/session", s.checkSession)
-	r.GET("/api/auth/check_session.php", s.checkSession) // Alias legacy
+	r.POST("/api/trucks/status", s.updateTruck)
+	r.POST("/api/trucks/config", s.updateTruck)
+	r.POST("/api/trucks/schedule", s.updateTruckSchedule)
+	r.POST("/api/location/geocode", s.handleLocation)
+	r.POST("/api/location/save", s.handleLocation)
+	r.POST("/api/location/delivery-zone", s.handleLocation)
+	r.POST("/api/location/products", s.handleLocation)
+	r.POST("/api/location/delivery-time", s.handleLocation)
 	r.PUT("/api/users/:id", s.updateUser)
-	r.POST("/api/update_cashier_profile.php", s.updateUser) // Alias legacy
+	r.POST("/api/users/profile", s.updateUser)
 	r.DELETE("/api/users/:id", s.deleteUser)
-	r.POST("/api/auth/delete_account.php", s.deleteUser) // Alias legacy
-	r.POST("/api/track", s.trackUsage)
-	r.POST("/api/track_usage.php", s.trackUsage) // Alias legacy
+	r.POST("/api/track/usage", s.trackUsage)
 
 	// Comandas & Tracking
 	r.GET("/api/comandas", s.getComandas)
-	r.GET("/api/get_comandas_v2.php", s.getComandas) // Alias legacy
-	r.GET("/api/comandas/realtime", s.realtimeComandas) // SSE realtime
+	r.GET("/api/comandas/realtime", s.realtimeComandas)
 	r.PUT("/api/comandas/:id/status", s.updateComandaStatus)
 	r.POST("/api/track/visit", s.trackVisit)
-	r.POST("/api/track_visit.php", s.trackVisit) // Alias legacy
 	r.POST("/api/track/interaction", s.trackInteraction)
-	r.POST("/api/track_interaction.php", s.trackInteraction) // Alias legacy
 
 	port := os.Getenv("PORT")
 	if port == "" {

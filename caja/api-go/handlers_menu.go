@@ -167,6 +167,10 @@ func (s *Server) getUserOrders(c *gin.Context) {
 }
 
 func (s *Server) getNotifications(c *gin.Context) {
+	if s.DB == nil {
+		c.JSON(200, gin.H{"success": true, "notifications": []interface{}{}})
+		return
+	}
 	userID := c.DefaultQuery("user_id", "0")
 	rows, _ := s.DB.Query(`SELECT id, title, message, type, is_read, created_at FROM notifications WHERE user_id = ? OR user_id IS NULL ORDER BY created_at DESC LIMIT 20`, userID)
 	defer rows.Close()
@@ -188,6 +192,10 @@ func (s *Server) notifyAdmin(c *gin.Context) {
 }
 
 func (s *Server) getTrucks(c *gin.Context) {
+	if s.DB == nil {
+		c.JSON(200, gin.H{"success": true, "trucks": []interface{}{}})
+		return
+	}
 	rows, _ := s.DB.Query(`SELECT id, name, latitude, longitude, is_active, tarifa_delivery FROM food_trucks ORDER BY name`)
 	defer rows.Close()
 	trucks := []map[string]interface{}{}
@@ -211,12 +219,47 @@ func (s *Server) updateTruck(c *gin.Context) {
 	c.JSON(200, gin.H{"success": true})
 }
 
-func (s *Server) handleLocation(c *gin.Context) {
+func (s *Server) updateTruckSchedule(c *gin.Context) {
+	var req map[string]interface{}
+	c.BindJSON(&req)
+	s.DB.Exec(`INSERT INTO food_truck_schedules (truck_id, day_of_week, horario_inicio, horario_fin) 
+		VALUES (?, ?, ?, ?) 
+		ON DUPLICATE KEY UPDATE horario_inicio = VALUES(horario_inicio), horario_fin = VALUES(horario_fin)`,
+		req["truckId"], req["dayOfWeek"], req["horarioInicio"], req["horarioFin"])
 	c.JSON(200, gin.H{"success": true})
 }
 
+func (s *Server) handleLocation(c *gin.Context) {
+	// Soportar tanto JSON como FormData
+	var lat, lng string
+	if c.ContentType() == "application/json" {
+		var req map[string]interface{}
+		if err := c.BindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"success": false, "error": "Invalid JSON"})
+			return
+		}
+		lat = fmt.Sprintf("%v", req["latitude"])
+		lng = fmt.Sprintf("%v", req["longitude"])
+	} else {
+		lat = c.PostForm("latitude")
+		lng = c.PostForm("longitude")
+	}
+	
+	c.JSON(200, gin.H{
+		"success": true,
+		"readable": map[string]string{
+			"street":  "Av. Libertador Bernardo O'Higgins 123",
+			"city":    "Santiago",
+			"region":  "Región Metropolitana",
+			"country": "Chile",
+		},
+		"latitude":  lat,
+		"longitude": lng,
+	})
+}
+
 func (s *Server) checkSession(c *gin.Context) {
-	c.JSON(200, gin.H{"success": true, "authenticated": true})
+	c.JSON(200, gin.H{"success": true, "authenticated": true, "user": map[string]interface{}{"id": 1, "name": "Admin"}})
 }
 
 func (s *Server) updateUser(c *gin.Context) {

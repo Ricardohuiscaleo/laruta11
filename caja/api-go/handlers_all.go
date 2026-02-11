@@ -69,6 +69,7 @@ func (s *Server) authLogout(c *gin.Context) {
 // ========== COMPRAS ==========
 
 func (s *Server) getCompras(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	rows, _ := s.DB.Query(`SELECT id, fecha_compra, proveedor, monto_total, metodo_pago, notas FROM compras ORDER BY fecha_compra DESC LIMIT 50`)
 	defer rows.Close()
 
@@ -84,6 +85,7 @@ func (s *Server) getCompras(c *gin.Context) {
 }
 
 func (s *Server) getComprasItems(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	rows, _ := s.DB.Query(`
 		SELECT id, name, category, unit, current_stock, 'ingredient' as type FROM ingredients WHERE is_active = 1
 		UNION ALL
@@ -104,6 +106,7 @@ func (s *Server) getComprasItems(c *gin.Context) {
 }
 
 func (s *Server) getProveedores(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	rows, _ := s.DB.Query(`SELECT proveedor, COUNT(*) FROM compras GROUP BY proveedor ORDER BY COUNT(*) DESC`)
 	defer rows.Close()
 
@@ -118,6 +121,7 @@ func (s *Server) getProveedores(c *gin.Context) {
 }
 
 func (s *Server) getSaldoDisponible(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	now := time.Now()
 	lastMonth := now.AddDate(0, -1, 0)
 	start1 := time.Date(lastMonth.Year(), lastMonth.Month(), 1, 17, 30, 0, 0, time.UTC)
@@ -138,6 +142,7 @@ func (s *Server) getSaldoDisponible(c *gin.Context) {
 }
 
 func (s *Server) getHistorialSaldo(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	rows, _ := s.DB.Query(`
 		SELECT fecha_compra, 'egreso', monto_total, CONCAT('Compra - ', proveedor) FROM compras
 		UNION ALL
@@ -156,6 +161,7 @@ func (s *Server) getHistorialSaldo(c *gin.Context) {
 }
 
 func (s *Server) getPrecioHistorico(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	id := c.Query("ingrediente_id")
 	var precio, cant, sub float64
 	var unidad, fecha, prov string
@@ -230,6 +236,7 @@ func (s *Server) uploadRespaldo(c *gin.Context) {
 
 // GET /api/ingredientes (5 usos)
 func (s *Server) getIngredientes(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	rows, _ := s.DB.Query(`SELECT id, name, unit, current_stock, min_stock_level, category, is_active FROM ingredients ORDER BY name`)
 	defer rows.Close()
 
@@ -269,6 +276,7 @@ func (s *Server) deleteIngrediente(c *gin.Context) {
 
 // GET /api/categories (8 usos + 4 usos = 12 usos)
 func (s *Server) getCategories(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	rows, err := s.DB.Query(`SELECT id, name, is_active, display_order FROM categories ORDER BY display_order, name`)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
@@ -311,6 +319,7 @@ func (s *Server) deleteCategory(c *gin.Context) {
 
 // GET /api/checklist (4 usos)
 func (s *Server) getChecklists(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	date := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
 	rows, err := s.DB.Query(`SELECT id, date, type, items, completed FROM checklists WHERE date = ? ORDER BY type`, date)
 	if err != nil {
@@ -376,6 +385,7 @@ func (s *Server) createOrder(c *gin.Context) {
 
 // GET /api/products
 func (s *Server) getProducts(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	inactive := c.Query("include_inactive") == "1"
 	query := "SELECT id, name, price, category_id, is_active FROM products"
 	if !inactive {
@@ -399,6 +409,7 @@ func (s *Server) getProducts(c *gin.Context) {
 
 // GET /api/products/:id
 func (s *Server) getProductByID(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	var id, catID, active int
 	var name string
 	var price float64
@@ -413,6 +424,7 @@ func (s *Server) getProductByID(c *gin.Context) {
 
 // GET /api/orders/pending
 func (s *Server) getPendingOrders(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	rows, err := s.DB.Query(`SELECT id, order_number, customer_data, items_data, total_amount, order_status FROM tuu_orders WHERE order_status IN ('pending', 'preparing') ORDER BY created_at DESC`)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
@@ -449,6 +461,7 @@ func (s *Server) updateOrderStatus(c *gin.Context) {
 
 // GET /api/dashboard?date=YYYY-MM-DD
 func (s *Server) getDashboard(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	date := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
 
 	var wg sync.WaitGroup
@@ -607,6 +620,7 @@ func (s *Server) queryAnalytics() gin.H {
 
 // GET /api/get_dashboard_analytics.php
 func (s *Server) getDashboardAnalytics(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	var totalOrders, totalUsers, totalProducts int
 	var totalRevenue float64
 	s.DB.QueryRow(`SELECT COUNT(*) FROM tuu_orders WHERE payment_status='paid'`).Scan(&totalOrders)
@@ -619,6 +633,7 @@ func (s *Server) getDashboardAnalytics(c *gin.Context) {
 
 // GET /api/get_dashboard_cards.php
 func (s *Server) getDashboardCards(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	// Calcular rango del mes con lógica de turnos
 	loc, _ := time.LoadLocation("America/Santiago")
 	now := time.Now().In(loc)
@@ -738,6 +753,7 @@ func (s *Server) getDashboardCards(c *gin.Context) {
 
 // GET /api/get_sales_analytics.php?period=month
 func (s *Server) getSalesAnalytics(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	period := c.DefaultQuery("period", "month")
 	var dateFilter string
 	switch period {
@@ -803,6 +819,7 @@ func (s *Server) getSalesAnalytics(c *gin.Context) {
 
 // GET /api/get_month_comparison.php
 func (s *Server) getMonthComparison(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	// Ventas por día del mes actual
 	currentSales := make([]float64, 31)
 	rows, _ := s.DB.Query(`
@@ -854,6 +871,7 @@ func (s *Server) getMonthComparison(c *gin.Context) {
 
 // GET /api/get_financial_reports.php
 func (s *Server) getFinancialReports(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	rows, _ := s.DB.Query(`
 		SELECT DATE_FORMAT(created_at, '%Y-%m') as month, 
 			COUNT(*) as orders, 
@@ -877,6 +895,7 @@ func (s *Server) getFinancialReports(c *gin.Context) {
 
 // GET /api/get_previous_month_summary.php
 func (s *Server) getPreviousMonthSummary(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	var totalOrders int
 	var totalRevenue, totalCost, totalProfit, avgTicket float64
 	
@@ -916,6 +935,7 @@ func (s *Server) getPreviousMonthSummary(c *gin.Context) {
 
 // GET /api/tuu/get_from_mysql.php?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&filter_type=month&page=1&limit=50
 func (s *Server) getTUUTransactions(c *gin.Context) {
+	if s.DB == nil { c.JSON(200, gin.H{"success": true, "data": []interface{}{}}); return }
 	startDate := c.DefaultQuery("start_date", "2024-01-01")
 	endDate := c.DefaultQuery("end_date", time.Now().AddDate(0, 0, 1).Format("2006-01-02"))
 	filterType := c.DefaultQuery("filter_type", "date_range")

@@ -833,7 +833,7 @@ const MenuItem = ({ product, onSelect, onAddToCart, onRemoveFromCart, quantity, 
     setIsTogglingStatus(true);
     try {
       const newStatus = isActive ? 0 : 1;
-      const res = await fetch('/api/toggle_product_status.php', {
+      const res = await fetch('/api/products/${productId}/status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ productId: product.id, active: newStatus })
@@ -1172,7 +1172,7 @@ export default function App() {
         payment_method: 'cash'
       };
       
-      const response = await fetch('/api/create_order.php', {
+      const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(orderData)
@@ -1229,7 +1229,7 @@ export default function App() {
     setNotifications(prev => [newNotification, ...prev]);
     
     // Notificar al admin
-    fetch('/api/notify_admin_payment.php', {
+    fetch('/api/notifications/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1261,7 +1261,7 @@ export default function App() {
     if (likedProducts.has(productId)) return;
     
     try {
-      const response = await fetch('/api/toggle_like.php', {
+      const response = await fetch('/api/products/${productId}/like', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ product_id: productId })
@@ -1311,7 +1311,7 @@ export default function App() {
   };
 
   const handleDeleteAccount = () => {
-    fetch('/api/auth/delete_account.php', { method: 'POST' })
+    fetch('/api/users/${user.id}', { method: 'POST' })
       .then(() => {
         window.location.href = '/api/auth/logout.php';
       })
@@ -1409,7 +1409,7 @@ export default function App() {
           formData.append('lat', latitude);
           formData.append('lng', longitude);
           
-          const response = await fetch('/api/location/geocode.php', {
+          const response = await fetch('/api/location/geocode', {
             method: 'POST',
             body: formData
           });
@@ -1464,7 +1464,7 @@ export default function App() {
             saveFormData.append('direccion', addressInfo.formatted_address);
             saveFormData.append('precision', position.coords.accuracy);
             
-            fetch('/api/location/save_location.php', {
+            fetch('/api/location/save', {
               method: 'POST',
               body: saveFormData
             });
@@ -1506,7 +1506,7 @@ export default function App() {
       formData.append('lat', lat);
       formData.append('lng', lng);
       
-      const response = await fetch('/api/location/check_delivery_zone.php', {
+      const response = await fetch('/api/location/delivery-zone', {
         method: 'POST',
         body: formData
       });
@@ -1544,7 +1544,7 @@ export default function App() {
       formData.append('lat', lat);
       formData.append('lng', lng);
       
-      const response = await fetch('/api/location/get_nearby_products.php', {
+      const response = await fetch('/api/location/products', {
         method: 'POST',
         body: formData
       });
@@ -1563,7 +1563,7 @@ export default function App() {
       formData.append('lng', lng);
       formData.append('radius', 10); // 10km radio
       
-      const response = await fetch('/api/get_nearby_trucks.php', {
+      const response = await fetch('/api/trucks', {
         method: 'POST',
         body: formData
       });
@@ -1593,7 +1593,7 @@ export default function App() {
     
     try {
       console.log('Cargando pedidos del usuario:', user.email);
-      const response = await fetch('/api/get_user_orders.php', {
+      const response = await fetch('/api/orders/user/${userId}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_email: user.email })
@@ -1621,7 +1621,7 @@ export default function App() {
     }
     
     try {
-      const response = await fetch('/api/get_order_notifications.php');
+      const response = await fetch('/api/notifications');
       const data = await response.json();
       
       if (data.success && data.notifications) {
@@ -1647,7 +1647,7 @@ export default function App() {
       formData.append('truck_lat', truckLat);
       formData.append('truck_lng', truckLng);
       
-      const response = await fetch('/api/location/calculate_delivery_time.php', {
+      const response = await fetch('/api/location/delivery-time', {
         method: 'POST',
         body: formData
       });
@@ -1977,7 +1977,7 @@ export default function App() {
         const formData = new FormData();
         formData.append('action', 'start_session');
         formData.append('session_id', sessionId);
-        const response = await fetch('/api/track_usage.php', { method: 'POST', body: formData });
+        const response = await fetch('/api/track/usage', { method: 'POST', body: formData });
         const result = await response.json();
         console.log('Start session result:', result);
       } catch (error) {
@@ -1994,7 +1994,7 @@ export default function App() {
       const formData = new FormData();
       formData.append('action', 'update_activity');
       formData.append('session_id', sessionId);
-      fetch('/api/track_usage.php', { method: 'POST', body: formData }).catch(() => {});
+      fetch('/api/track/usage', { method: 'POST', body: formData }).catch(() => {});
     }, 30000);
     
     // Finalizar sesión al cerrar
@@ -2040,7 +2040,7 @@ export default function App() {
     }
     
     // Verificar si usuario está logueado
-    fetch('/api/auth/check_session.php')
+    fetch('/api/auth/session')
       .then(response => {
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
@@ -2096,7 +2096,7 @@ export default function App() {
       // Limpiar URL y recargar sesión
       window.history.replaceState({}, document.title, window.location.pathname);
       // Recargar datos de sesión sin reload completo
-      fetch('/api/auth/check_session.php')
+      fetch('/api/auth/session')
         .then(response => response.json())
         .then(data => {
           if (data.authenticated) {
@@ -2188,11 +2188,11 @@ export default function App() {
                 onClick={async () => { 
                   vibrate(30); 
                   setShowStatusModal(true);
-                  const res = await fetch('/api/get_truck_status.php?truckId=4');
+                  const res = await fetch('/api/trucks/status?truckId=4');
                   const data = await res.json();
                   if (data.success) setTruckStatus(data.truck);
                   
-                  const schedRes = await fetch('/api/get_truck_schedules.php?truckId=4');
+                  const schedRes = await fetch('/api/trucks/schedules?truckId=4');
                   const schedData = await schedRes.json();
                   if (schedData.success) {
                     setSchedules(schedData.schedules);
@@ -2634,7 +2634,7 @@ export default function App() {
                 <button
                   onClick={async () => {
                     try {
-                      const response = await fetch('/api/update_cashier_profile.php', {
+                      const response = await fetch('/api/users/profile', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -3115,7 +3115,7 @@ export default function App() {
                           delivery_address: customerInfo.address || null,
                           payment_method: 'card'
                         };
-                        const response = await fetch('/api/create_order.php', {
+                        const response = await fetch('/api/orders', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify(orderData)
@@ -3161,7 +3161,7 @@ export default function App() {
                           delivery_address: customerInfo.address || null,
                           payment_method: 'transfer'
                         };
-                        const response = await fetch('/api/create_order.php', {
+                        const response = await fetch('/api/orders', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify(orderData)
@@ -3207,7 +3207,7 @@ export default function App() {
                           delivery_address: customerInfo.address || null,
                           payment_method: 'pedidosya'
                         };
-                        const response = await fetch('/api/create_order.php', {
+                        const response = await fetch('/api/orders', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify(orderData)
@@ -3535,7 +3535,7 @@ export default function App() {
                                   const formData = new FormData();
                                   formData.append('lat', latitude);
                                   formData.append('lng', longitude);
-                                  const res = await fetch('/api/location/geocode.php', { method: 'POST', body: formData });
+                                  const res = await fetch('/api/location/geocode', { method: 'POST', body: formData });
                                   const data = await res.json();
                                   if (data.success) {
                                     setTempTruckData({
@@ -3595,7 +3595,7 @@ export default function App() {
                     <button
                       onClick={async () => {
                         try {
-                          const res = await fetch('/api/update_truck_config.php', {
+                          const res = await fetch('/api/trucks/config', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ truckId: 4, ...tempTruckData })
@@ -3632,7 +3632,7 @@ export default function App() {
                   onChange={async (newStatus) => {
                     setIsUpdatingStatus(true);
                     try {
-                      const res = await fetch('/api/update_truck_status.php', {
+                      const res = await fetch('/api/trucks/status', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ truckId: 4, activo: newStatus ? 1 : 0 })
@@ -3729,7 +3729,7 @@ export default function App() {
                     onClick={async () => {
                       try {
                         for (const schedule of schedules) {
-                          await fetch('/api/update_truck_schedule.php', {
+                          await fetch('/api/trucks/schedule', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
