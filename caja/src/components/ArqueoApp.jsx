@@ -39,7 +39,7 @@ export default function ArqueoApp() {
   const loadSalesData = async (daysAgo = 0) => {
     if (salesData) setIsTransitioning(true);
     try {
-      const apiUrl = 'https://websites-api-go-caja-r11.dj3bvg.easypanel.host';
+      const apiUrl = 'https://api-go-caja-r11.laruta11.cl';
       const url = daysAgo > 0 ? `${apiUrl}/api/sales/summary?days_ago=${daysAgo}&v=${Date.now()}` : `${apiUrl}/api/sales/summary?v=${Date.now()}`;
       const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
       const data = await response.json();
@@ -57,7 +57,7 @@ export default function ArqueoApp() {
 
   const loadSaldoCaja = async () => {
     try {
-      const response = await fetch('https://websites-api-go-caja-r11.dj3bvg.easypanel.host/api/caja/saldo');
+      const response = await fetch('https://api-go-caja-r11.laruta11.cl/api/caja/saldo');
       const data = await response.json();
       if (data.success) {
         setSaldoCaja(data.saldo_actual);
