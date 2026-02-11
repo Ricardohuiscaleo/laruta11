@@ -624,33 +624,71 @@ func (s *Server) getDashboardCards(c *gin.Context) {
 	s.DB.QueryRow(`SELECT COUNT(*), COALESCE(SUM(installment_amount),0) FROM tuu_orders WHERE DATE(created_at)=? AND payment_status='paid'`, today).Scan(&ordersToday, &revenueToday)
 	s.DB.QueryRow(`SELECT COUNT(*), COALESCE(SUM(installment_amount),0) FROM tuu_orders WHERE MONTH(created_at)=MONTH(NOW()) AND payment_status='paid'`).Scan(&ordersMonth, &revenueMonth)
 	
-	c.JSON(200, gin.H{"success": true, "orders_today": ordersToday, "revenue_today": revenueToday, "orders_month": ordersMonth, "revenue_month": revenueMonth})
+	c.JSON(200, gin.H{
+		"success": true,
+		"data": gin.H{
+			"compras": gin.H{
+				"total_mes":      0,
+				"numero_compras":  0,
+				"items_criticos":  0,
+				"top_proveedor":   "-",
+			},
+			"inventarios": gin.H{
+				"valor_total":            0,
+				"items_activos":          0,
+				"top_inventario":         "-",
+				"top_inventario_valor":   0,
+				"rotacion":               0,
+				"mas_vendido":            "-",
+				"mas_vendido_id":         0,
+				"mas_vendido_ingresos":   0,
+			},
+			"plan_compras": gin.H{
+				"items_reposicion": 0,
+				"costo_estimado":   0,
+				"items_urgentes":   0,
+				"dias_stock":       "-",
+			},
+		},
+	})
 }
 
 // GET /api/get_sales_analytics.php?period=month
 func (s *Server) getSalesAnalytics(c *gin.Context) {
 	period := c.DefaultQuery("period", "month")
 	var dateFilter string
-	if period == "day" {
+	switch period {
+	case "day":
 		dateFilter = "DATE(created_at)=CURDATE()"
-	} else if period == "week" {
+	case "week":
 		dateFilter = "YEARWEEK(created_at)=YEARWEEK(NOW())"
-	} else {
+	default:
 		dateFilter = "MONTH(created_at)=MONTH(NOW())"
 	}
 	
-	rows, _ := s.DB.Query(`SELECT DATE(created_at) as date, COUNT(*) as orders, COALESCE(SUM(installment_amount),0) as revenue FROM tuu_orders WHERE `+dateFilter+` AND payment_status='paid' GROUP BY DATE(created_at) ORDER BY date`)
-	defer rows.Close()
-	
-	data := []gin.H{}
-	for rows.Next() {
-		var date string
-		var orders int
-		var revenue float64
-		rows.Scan(&date, &orders, &revenue)
-		data = append(data, gin.H{"date": date, "orders": orders, "revenue": revenue})
+	var totalOrders, totalProducts int
+	var totalRevenue, totalCost, totalProfit, totalDelivery, avgTicket float64
+	s.DB.QueryRow(`SELECT COUNT(*) FROM tuu_orders WHERE `+dateFilter+` AND payment_status='paid'`).Scan(&totalOrders)
+	s.DB.QueryRow(`SELECT COALESCE(SUM(installment_amount),0) FROM tuu_orders WHERE `+dateFilter+` AND payment_status='paid'`).Scan(&totalRevenue)
+	s.DB.QueryRow(`SELECT COALESCE(SUM(delivery_fee),0) FROM tuu_orders WHERE `+dateFilter+` AND payment_status='paid'`).Scan(&totalDelivery)
+	if totalOrders > 0 {
+		avgTicket = totalRevenue / float64(totalOrders)
 	}
-	c.JSON(200, gin.H{"success": true, "period": period, "data": data})
+	
+	c.JSON(200, gin.H{
+		"success": true,
+		"data": gin.H{
+			"summary_kpis": gin.H{
+				"total_orders":   totalOrders,
+				"total_revenue":  totalRevenue,
+				"total_cost":     totalCost,
+				"total_profit":   totalProfit,
+				"total_delivery": totalDelivery,
+				"avg_ticket":     avgTicket,
+			},
+			"payment_summary": []gin.H{},
+		},
+	})
 }
 
 // GET /api/get_month_comparison.php
@@ -663,7 +701,17 @@ func (s *Server) getMonthComparison(c *gin.Context) {
 	if previousMonth > 0 {
 		growth = ((currentMonth - previousMonth) / previousMonth) * 100
 	}
-	c.JSON(200, gin.H{"success": true, "current_month": currentMonth, "previous_month": previousMonth, "growth": growth})
+	c.JSON(200, gin.H{
+		"success": true,
+		"data": gin.H{
+			"currentMonth": gin.H{
+				"salesByWeekday": []float64{},
+			},
+			"previousMonth": gin.H{
+				"salesByWeekday": []float64{},
+			},
+		},
+	})
 }
 
 // GET /api/get_financial_reports.php
