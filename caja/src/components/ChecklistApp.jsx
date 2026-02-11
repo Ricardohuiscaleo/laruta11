@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle, Circle, Camera, ArrowLeft, CheckSquare, Timer, ChevronDown, ChevronUp, X } from 'lucide-react';
 
-const API_URL = '/api/checklist.php';
+const API_URL = '/api/checklist';
 
 export default function ChecklistApp() {
   const [activeTab, setActiveTab] = useState('apertura');

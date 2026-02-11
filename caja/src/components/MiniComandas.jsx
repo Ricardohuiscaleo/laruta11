@@ -59,7 +59,7 @@ const MiniComandas = ({ onOrdersUpdate }) => {
       
       const results = [];
       for (const type of types) {
-        const res = await fetch(`/api/checklist.php?action=get_active&type=${type}&date=${now.toISOString().split('T')[0]}`);
+        const res = await fetch(`/api/checklist?action=get_active&type=${type}&date=${now.toISOString().split('T')[0]}`);
         const data = await res.json();
         if (data.success && data.checklist) {
           results.push(data.checklist);

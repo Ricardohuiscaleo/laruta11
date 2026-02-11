@@ -1077,7 +1077,7 @@ export default function App() {
   const [currentDayOfWeek, setCurrentDayOfWeek] = useState(null);
   const [editingSchedules, setEditingSchedules] = useState(false);
   const [showInactiveProducts, setShowInactiveProducts] = useState(false);
-  const [buildVersion] = useState('v2.0.1');
+  const [buildVersion] = useState('v2.0.3');
 
 
 
