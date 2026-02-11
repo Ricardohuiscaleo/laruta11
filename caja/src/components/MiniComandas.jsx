@@ -10,7 +10,7 @@ const MiniComandas = ({ onOrdersUpdate }) => {
   const [currentTime, setCurrentTime] = useState(Date.now());
 
   useEffect(() => {
-    const eventSource = new EventSource('https://websites-api-go-caja-r11.dj3bvg.easypanel.host/api/comandas/realtime');
+    const eventSource = new EventSource('/api/comandas/realtime');
     
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -122,7 +122,7 @@ const MiniComandas = ({ onOrdersUpdate }) => {
 
     setProcessing(orderId);
     try {
-      const response = await fetch('/api/confirm_transfer_payment.php', {
+      const response = await fetch('/api/payments/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ order_id: orderId })
@@ -147,8 +147,8 @@ const MiniComandas = ({ onOrdersUpdate }) => {
 
     setProcessing(orderId);
     try {
-      const response = await fetch('/api/tuu/update_order_status.php', {
-        method: 'POST',
+      const response = await fetch('/api/orders/status', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ order_id: orderId, order_status: 'delivered' })
       });
@@ -181,7 +181,7 @@ const MiniComandas = ({ onOrdersUpdate }) => {
     try {
       if (isRL6) {
         // Para pedidos RL6, solo llamar a la API de reintegro (ya cancela el pedido)
-        const refundResponse = await fetch('/api/rl6_refund_credit.php', {
+        const refundResponse = await fetch('/api/rl6/refund', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -200,7 +200,7 @@ const MiniComandas = ({ onOrdersUpdate }) => {
         }
       } else {
         // Para pedidos normales, cancelar con restauración de inventario
-        const response = await fetch('/api/cancel_order.php', {
+        const response = await fetch('/api/orders/cancel', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ order_id: orderId })
