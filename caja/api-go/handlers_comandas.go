@@ -30,7 +30,11 @@ func (s *Server) getComandas(c *gin.Context) {
 	
 	query += " ORDER BY o.created_at DESC"
 	
-	rows, _ := s.DB.Query(query, params...)
+	rows, err := s.DB.Query(query, params...)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
 	defer rows.Close()
 	
 	comandas := []map[string]interface{}{}
@@ -39,14 +43,21 @@ func (s *Server) getComandas(c *gin.Context) {
 		var orderNum, customerName, customerPhone, itemsData, orderStatus, paymentStatus, paymentMethod, deliveryType, createdAt string
 		var amount float64
 		
-		rows.Scan(&id, &orderNum, &customerName, &customerPhone, &itemsData, &amount, &orderStatus, &paymentStatus, &paymentMethod, &deliveryType, &createdAt)
+		if err := rows.Scan(&id, &orderNum, &customerName, &customerPhone, &itemsData, &amount, &orderStatus, &paymentStatus, &paymentMethod, &deliveryType, &createdAt); err != nil {
+			continue
+		}
+		
+		var items []interface{}
+		if itemsData != "" {
+			json.Unmarshal([]byte(itemsData), &items)
+		}
 		
 		comandas = append(comandas, map[string]interface{}{
 			"id":             id,
 			"order_number":   orderNum,
 			"customer_name":  customerName,
 			"customer_phone": customerPhone,
-			"items":          json.RawMessage(itemsData),
+			"items":          items,
 			"total":          amount,
 			"order_status":   orderStatus,
 			"payment_status": paymentStatus,
