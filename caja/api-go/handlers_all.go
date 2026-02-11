@@ -666,7 +666,7 @@ func (s *Server) getSalesAnalytics(c *gin.Context) {
 		dateFilter = "MONTH(created_at)=MONTH(NOW())"
 	}
 	
-	var totalOrders, totalProducts int
+	var totalOrders int
 	var totalRevenue, totalCost, totalProfit, totalDelivery, avgTicket float64
 	s.DB.QueryRow(`SELECT COUNT(*) FROM tuu_orders WHERE `+dateFilter+` AND payment_status='paid'`).Scan(&totalOrders)
 	s.DB.QueryRow(`SELECT COALESCE(SUM(installment_amount),0) FROM tuu_orders WHERE `+dateFilter+` AND payment_status='paid'`).Scan(&totalRevenue)
@@ -697,10 +697,9 @@ func (s *Server) getMonthComparison(c *gin.Context) {
 	s.DB.QueryRow(`SELECT COALESCE(SUM(installment_amount),0) FROM tuu_orders WHERE MONTH(created_at)=MONTH(NOW()) AND payment_status='paid'`).Scan(&currentMonth)
 	s.DB.QueryRow(`SELECT COALESCE(SUM(installment_amount),0) FROM tuu_orders WHERE MONTH(created_at)=MONTH(NOW())-1 AND payment_status='paid'`).Scan(&previousMonth)
 	
-	growth := 0.0
-	if previousMonth > 0 {
-		growth = ((currentMonth - previousMonth) / previousMonth) * 100
-	}
+	_ = currentMonth
+	_ = previousMonth
+	
 	c.JSON(200, gin.H{
 		"success": true,
 		"data": gin.H{
