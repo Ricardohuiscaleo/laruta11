@@ -13,45 +13,98 @@ import (
 
 // GET /api/menu?active_only=1
 func (s *Server) getMenu(c *gin.Context) {
-	activeOnly := c.DefaultQuery("active_only", "1") == "1"
-	query := `
-		SELECT p.id, p.name, COALESCE(p.description,''), p.price, COALESCE(p.image_url,''), 
-			COALESCE(p.stock_quantity,0), p.is_active, COALESCE(p.likes,0), 
-			COALESCE(c.name,'Sin categoría'), COALESCE(c.id,0)
+	stmt, err := s.DB.Query(`
+		SELECT 
+			p.id, p.name, COALESCE(p.description,''), p.price, COALESCE(p.image_url,''),
+			p.stock_quantity, p.is_active, COALESCE(p.likes,0), COALESCE(p.views,0),
+			p.category_id, p.subcategory_id, COALESCE(p.grams,300),
+			COALESCE(s.name,'') as subcategory_name,
+			COALESCE(AVG(r.rating), 0) as avg_rating,
+			COUNT(r.id) as review_count
 		FROM products p
-		LEFT JOIN categories c ON p.category_id = c.id`
+		LEFT JOIN subcategories s ON p.subcategory_id = s.id
+		LEFT JOIN reviews r ON p.id = r.product_id AND r.is_approved = 1
+		WHERE p.is_active = 1
+		GROUP BY p.id
+		ORDER BY p.category_id, p.subcategory_id, p.name
+	`)
 	
-	if activeOnly {
-		query += " WHERE p.is_active = 1"
-	}
-	query += " ORDER BY c.display_order, p.name"
-	
-	rows, err := s.DB.Query(query)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	defer rows.Close()
+	defer stmt.Close()
 	
-	menu := map[string][]map[string]interface{}{}
-	for rows.Next() {
-		var id, catID, stock, likes, active int
-		var name, desc, img, catName string
-		var price float64
-		if err := rows.Scan(&id, &name, &desc, &price, &img, &stock, &active, &likes, &catName, &catID); err != nil {
-			continue
+	categoryMap := map[int]string{
+		1: "la_ruta_11", 2: "churrascos", 3: "hamburguesas", 4: "completos",
+		5: "papas_y_snacks", 6: "personalizar", 7: "extras", 8: "Combos", 12: "papas",
+	}
+	
+	subcategoryMap := map[string]string{
+		"Tomahawks": "tomahawks", "Carne": "carne", "Pollo": "pollo",
+		"Vegetariano": "vegetariano", "Salchicas": "salchicas", "Lomito": "lomito",
+		"Tomahawk": "tomahawk", "Lomo Vetado": "lomo vetado", "Churrasco": "churrasco",
+		"Clásicas": "clasicas", "Especiales": "especiales", "Tradicionales": "tradicionales",
+		"Al Vapor": "al vapor", "Papas": "papas", "Jugos": "jugos", "Bebidas": "bebidas",
+		"Salsas": "salsas", "Empanadas": "empanadas", "Hamburguesas": "hamburguesas",
+		"Sándwiches": "Sándwiches", "Completos": "completos",
+	}
+	
+	menuData := map[string]map[string][]map[string]interface{}{
+		"la_ruta_11":     {"tomahawks": {}},
+		"churrascos":      {"pollo": {}, "salchicas": {}, "lomito": {}, "tomahawk": {}, "lomo vetado": {}, "churrasco": {}},
+		"hamburguesas":    {"clasicas": {}, "especiales": {}},
+		"completos":       {"tradicionales": {}, "especiales": {}, "al vapor": {}},
+		"papas_y_snacks": {"papas": {}, "empanadas": {}, "jugos": {}, "bebidas": {}, "salsas": {}},
+		"papas":           {"papas": {}},
+		"Combos":          {"hamburguesas": {}, "Sándwiches": {}, "completos": {}},
+		"personalizar":    {"personalizar": {}},
+		"extras":          {"extras": {}},
+	}
+	
+	for stmt.Next() {
+		var id, stock, likes, views, catID, grams, reviewCount int
+		var subcatID sql.NullInt64
+		var name, desc, img, subcatName string
+		var price, avgRating float64
+		var active int
+		
+		stmt.Scan(&id, &name, &desc, &price, &img, &stock, &active, &likes, &views, &catID, &subcatID, &grams, &subcatName, &avgRating, &reviewCount)
+		
+		if img == "" {
+			img = "https://laruta11-images.s3.amazonaws.com/menu/default-product.jpg"
 		}
 		
-		if _, ok := menu[catName]; !ok {
-			menu[catName] = []map[string]interface{}{}
+		categoryKey := categoryMap[catID]
+		if categoryKey == "" {
+			categoryKey = "papas_y_snacks"
 		}
-		menu[catName] = append(menu[catName], map[string]interface{}{
-			"id": id, "name": name, "description": desc, "price": price,
-			"image_url": img, "stock": stock, "active": active, "likes": likes,
-			"category": catName, "category_id": catID,
-		})
+		
+		subcategorySlug := "tomahawks"
+		if subcatName != "" {
+			if mapped, ok := subcategoryMap[subcatName]; ok {
+				subcategorySlug = mapped
+			}
+		}
+		
+		product := map[string]interface{}{
+			"id": id, "name": name, "price": int(price), "image": img,
+			"description": desc, "grams": grams, "views": views, "likes": likes,
+			"category_id": catID, "subcategory_id": subcatID.Int64,
+			"subcategory_name": subcatName, "query": name,
+			"reviews": map[string]interface{}{"count": reviewCount, "average": avgRating},
+		}
+		
+		if _, ok := menuData[categoryKey]; !ok {
+			menuData[categoryKey] = map[string][]map[string]interface{}{}
+		}
+		if _, ok := menuData[categoryKey][subcategorySlug]; !ok {
+			menuData[categoryKey][subcategorySlug] = []map[string]interface{}{}
+		}
+		menuData[categoryKey][subcategorySlug] = append(menuData[categoryKey][subcategorySlug], product)
 	}
-	c.JSON(200, gin.H{"success": true, "menu": menu})
+	
+	c.JSON(200, gin.H{"success": true, "menuData": menuData})
 }
 
 // POST /api/products/:id/like
