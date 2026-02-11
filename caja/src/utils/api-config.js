@@ -1,11 +1,11 @@
 // Feature Flags para migración PHP → Go
 export const API_FLAGS = {
-  USE_GO_AUTH: false,
-  USE_GO_COMPRAS: false,
-  USE_GO_INVENTORY: false,
-  USE_GO_QUALITY: false,
-  USE_GO_CATALOG: false,
-  USE_GO_ORDERS: false
+  USE_GO_AUTH: true,
+  USE_GO_COMPRAS: true,
+  USE_GO_INVENTORY: true,
+  USE_GO_QUALITY: true,
+  USE_GO_CATALOG: true,
+  USE_GO_ORDERS: true
 };
 
 const GO_API = 'https://websites-api-go-caja-r11.dj3bvg.easypanel.host';

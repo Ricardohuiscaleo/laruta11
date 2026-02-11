@@ -151,17 +151,22 @@
             errorDiv.style.display = 'none';
             
             try {
-                const response = await fetch('/api/admin_auth.php', {
+                const response = await fetch('https://websites-api-go-caja-r11.dj3bvg.easypanel.host/api/auth/login', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({ user: username, pass: password, type: 'admin' })
                 });
                 
                 const result = await response.json();
                 
                 if (result.success) {
+                    localStorage.setItem('admin_session', JSON.stringify({
+                        user: result.user,
+                        role: result.role,
+                        timestamp: Date.now()
+                    }));
                     window.location.href = '/admin';
                 } else {
                     errorDiv.textContent = result.error || 'Credenciales incorrectas';
