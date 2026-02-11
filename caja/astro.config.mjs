@@ -9,6 +9,14 @@ export default defineConfig({
     assets: 'assets'
   },
   vite: {
+    server: {
+      proxy: {
+        '/api': {
+          target: process.env.API_URL || 'http://localhost:3002',
+          changeOrigin: true
+        }
+      }
+    },
     build: {
       rollupOptions: {
         output: {
