@@ -3,6 +3,7 @@ package auth
 import (
 	"database/sql"
 	"os"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -26,30 +27,20 @@ func (h *Handler) Login(c *gin.Context) {
 			valid, role = true, "inventario"
 		}
 	case "comandas":
-		if req.User == "comandas" && req.Pass == os.Getenv("CAJA_PASSWORD_CAJERA") {
+		if req.User == os.Getenv("COMANDAS_USER") && req.Pass == os.Getenv("COMANDAS_PASSWORD") {
 			valid, role = true, "comandas"
 		}
 	case "admin":
-		// Debug: Log environment variables (sin mostrar contraseñas completas)
-		adminPass := os.Getenv("ADMIN_PASSWORD_ADMIN")
-		ricardoPass := os.Getenv("ADMIN_PASSWORD_RICARDO")
-		
-		// Log para debugging (solo primeros 3 caracteres de la contraseña)
-		if len(adminPass) > 0 {
-			println("DEBUG: ADMIN_PASSWORD_ADMIN está configurada (primeros 3 chars):", adminPass[:3])
-		} else {
-			println("DEBUG: ADMIN_PASSWORD_ADMIN NO está configurada")
+		// Validar contra múltiples usuarios admin desde variables de entorno
+		adminUsers := map[string]string{
+			os.Getenv("ADMIN_USER_ADMIN"):   os.Getenv("ADMIN_PASSWORD_ADMIN"),
+			os.Getenv("ADMIN_USER_RICARDO"): os.Getenv("ADMIN_PASSWORD_RICARDO"),
+			os.Getenv("ADMIN_USER_MANAGER"): os.Getenv("ADMIN_PASSWORD_MANAGER"),
+			os.Getenv("ADMIN_USER_RUTA11"):  os.Getenv("ADMIN_PASSWORD_RUTA11"),
 		}
-		
-		if len(ricardoPass) > 0 {
-			println("DEBUG: ADMIN_PASSWORD_RICARDO está configurada (primeros 3 chars):", ricardoPass[:3])
-		} else {
-			println("DEBUG: ADMIN_PASSWORD_RICARDO NO está configurada")
-		}
-		
-		println("DEBUG: Usuario recibido:", req.User, "| Contraseña recibida (primeros 3 chars):", req.Pass[:3])
-		
-		if (req.User == "admin" && req.Pass == os.Getenv("ADMIN_PASSWORD_ADMIN")) || (req.User == "ricardo" && req.Pass == os.Getenv("ADMIN_PASSWORD_RICARDO")) || (req.User == "manager" && req.Pass == os.Getenv("ADMIN_PASSWORD_MANAGER")) || (req.User == "ruta11" && req.Pass == os.Getenv("ADMIN_PASSWORD_RUTA11")) {
+
+		// Verificar si el usuario existe y la contraseña coincide
+		if expectedPass, exists := adminUsers[req.User]; exists && expectedPass != "" && req.Pass == expectedPass {
 			valid, role = true, "admin"
 		}
 	}
