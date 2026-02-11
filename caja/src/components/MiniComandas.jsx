@@ -10,34 +10,33 @@ const MiniComandas = ({ onOrdersUpdate }) => {
   const [currentTime, setCurrentTime] = useState(Date.now());
 
   useEffect(() => {
-    loadOrders();
+    const eventSource = new EventSource('https://websites-api-go-caja-r11.dj3bvg.easypanel.host/api/comandas/realtime');
+    
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.success && data.comandas) {
+        setOrders(data.comandas);
+        setLoading(false);
+      }
+    };
+    
+    eventSource.onerror = () => {
+      eventSource.close();
+      setTimeout(() => window.location.reload(), 3000);
+    };
+    
     loadChecklists();
-    const interval = setInterval(() => {
-      loadOrders();
-      loadChecklists();
-    }, 3000);
+    const checklistInterval = setInterval(loadChecklists, 30000);
     const timeInterval = setInterval(() => setCurrentTime(Date.now()), 1000);
+    
     return () => {
-      clearInterval(interval);
+      eventSource.close();
+      clearInterval(checklistInterval);
       clearInterval(timeInterval);
     };
   }, []);
 
 
-
-  const loadOrders = async () => {
-    try {
-      const response = await fetch(`/api/tuu/get_comandas_v2.php?t=${Date.now()}`);
-      const data = await response.json();
-      if (data.success) {
-        setOrders(data.orders || []);
-      }
-    } catch (error) {
-      console.error('Error cargando pedidos:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const loadChecklists = async () => {
     try {

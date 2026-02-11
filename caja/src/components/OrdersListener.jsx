@@ -4,7 +4,7 @@ const OrdersListener = ({ onOrdersUpdate }) => {
   useEffect(() => {
     const loadOrders = async () => {
       try {
-        const response = await fetch(`/api/tuu/get_comandas_v2.php?t=${Date.now()}`);
+        const response = await fetch(`https://websites-api-go-caja-r11.dj3bvg.easypanel.host/api/comandas?status=pending&date=${new Date().toISOString().split('T')[0]}&t=${Date.now()}`);
         const data = await response.json();
         if (data.success) {
           const allOrders = data.orders || [];

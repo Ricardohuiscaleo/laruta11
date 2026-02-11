@@ -125,6 +125,7 @@ func main() {
 	// Comandas & Tracking
 	r.GET("/api/comandas", s.getComandas)
 	r.GET("/api/get_comandas_v2.php", s.getComandas) // Alias legacy
+	r.GET("/api/comandas/realtime", s.realtimeComandas) // SSE realtime
 	r.PUT("/api/comandas/:id/status", s.updateComandaStatus)
 	r.POST("/api/track/visit", s.trackVisit)
 	r.POST("/api/track_visit.php", s.trackVisit) // Alias legacy
