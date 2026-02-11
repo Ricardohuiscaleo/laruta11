@@ -17,7 +17,7 @@
         import { createElement as h, useState, useEffect } from 'https://esm.sh/react@18';
         import { createRoot } from 'https://esm.sh/react-dom@18/client';
 
-        const API_BASE = '/api';
+        const GO_API = 'https://websites-api-go-caja-r11.dj3bvg.easypanel.host';
 
         // Componente principal
         function InventarioApp() {
@@ -37,15 +37,15 @@
                 setLoading(true);
                 try {
                     if (activeTab === 'productos') {
-                        const res = await fetch(`${API_BASE}/get_productos.php`);
+                        const res = await fetch(`${GO_API}/api/products`);
                         const data = await res.json();
-                        setProductos(data.productos || []);
+                        setProductos(data.products || []);
                     } else if (activeTab === 'categorias') {
-                        const res = await fetch(`${API_BASE}/get_categories.php`);
+                        const res = await fetch(`${GO_API}/api/categories`);
                         const data = await res.json();
                         setCategorias(data.categories || []);
                     } else if (activeTab === 'ingredientes') {
-                        const res = await fetch(`${API_BASE}/get_ingredientes.php`);
+                        const res = await fetch(`${GO_API}/api/ingredientes`);
                         const data = await res.json();
                         setIngredientes(data.ingredientes || []);
                     }
@@ -65,14 +65,12 @@
                 if (!confirm('¿Estás seguro de eliminar este elemento?')) return;
                 
                 try {
-                    const endpoint = activeTab === 'productos' ? 'delete_producto.php' : 
-                                   activeTab === 'categorias' ? 'delete_category.php' : 
-                                   'delete_ingrediente.php';
+                    const endpoint = activeTab === 'productos' ? `/api/products/${id}` : 
+                                   activeTab === 'categorias' ? `/api/categories/${id}` : 
+                                   `/api/ingredientes/${id}`;
                     
-                    await fetch(`${API_BASE}/${endpoint}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ id })
+                    await fetch(`${GO_API}${endpoint}`, {
+                        method: 'DELETE'
                     });
                     
                     loadData();
@@ -242,18 +240,16 @@
                 setSaving(true);
 
                 try {
-                    const endpoint = editItem ? 
-                        (activeTab === 'productos' ? 'update_producto.php' : 
-                         activeTab === 'categorias' ? 'update_category.php' : 
-                         'update_ingrediente.php') :
-                        (activeTab === 'productos' ? 'add_producto.php' : 
-                         activeTab === 'categorias' ? 'save_category.php' : 
-                         'save_ingrediente.php');
+                    const endpoint = activeTab === 'productos' ? '/api/products' : 
+                                   activeTab === 'categorias' ? '/api/categories' : 
+                                   '/api/ingredientes';
 
-                    await fetch(`${API_BASE}/${endpoint}`, {
+                    const payload = editItem ? { ...formData, id: editItem.id } : formData;
+
+                    await fetch(`${GO_API}${endpoint}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(formData)
+                        body: JSON.stringify(payload)
                     });
 
                     onSave();

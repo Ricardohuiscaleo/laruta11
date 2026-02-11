@@ -81,10 +81,13 @@
   </div>
   
   <script>
+    const GO_API = 'https://websites-api-go-caja-r11.dj3bvg.easypanel.host';
+    
     window.loadIngredients = function() {
-      fetch('/api/get_ingredientes.php?t=' + Date.now())
+      fetch(GO_API + '/api/ingredientes')
         .then(r => r.json())
-        .then(data => {
+        .then(res => {
+          const data = res.ingredientes || res;
           console.log('Ingredientes cargados:', data.length);
           const tbody = document.querySelector('#ingredientsTable tbody');
           if (!tbody) return;
@@ -249,9 +252,19 @@
           formData.append('supplier', document.getElementById('addSupplier').value);
           formData.append('is_active', '1');
           
-          fetch('/api/save_ingrediente.php', {
+          fetch(GO_API + '/api/ingredientes', {
             method: 'POST',
-            body: formData
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: document.getElementById('addName').value,
+              category: document.getElementById('addCategory').value,
+              unit: document.getElementById('addUnit').value,
+              cost_per_unit: parseFloat(document.getElementById('addCost').value),
+              current_stock: parseFloat(document.getElementById('addStock').value),
+              min_stock_level: parseFloat(document.getElementById('addMinStock').value),
+              supplier: document.getElementById('addSupplier').value,
+              is_active: true
+            })
           })
           .then(r => r.json())
           .then(result => {
@@ -272,10 +285,11 @@
     
     window.editIngredient = function(id) {
       // Buscar el ingrediente en los datos cargados
-      fetch('/api/get_ingredientes.php')
+      fetch(GO_API + '/api/ingredientes')
         .then(r => r.json())
-        .then(ingredients => {
-          const ingredient = ingredients.find(i => i.id === id);
+        .then(res => {
+          const ingredients = res.ingredientes || res;
+          const ingredient = ingredients.find(i => i.id === id || i.id === String(id));
           if (!ingredient) {
             alert('Ingrediente no encontrado');
             return;
@@ -391,9 +405,20 @@
               formData.append('supplier', document.getElementById('editSupplier').value);
               formData.append('is_active', '1');
               
-              fetch('/api/update_ingrediente_full.php', {
+              fetch(GO_API + '/api/ingredientes', {
                 method: 'POST',
-                body: formData
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  id: parseFloat(document.getElementById('editId').value),
+                  name: document.getElementById('editName').value,
+                  category: document.getElementById('editCategory').value,
+                  unit: document.getElementById('editUnit').value,
+                  cost_per_unit: parseFloat(document.getElementById('editCost').value),
+                  current_stock: parseFloat(document.getElementById('editStock').value),
+                  min_stock_level: parseFloat(document.getElementById('editMinStock').value),
+                  supplier: document.getElementById('editSupplier').value,
+                  is_active: true
+                })
               })
               .then(r => {
                 if (!r.ok) {
@@ -436,12 +461,8 @@
     
     window.deleteIngredient = function(id) {
       if (confirm('¿Estás seguro de eliminar este ingrediente?')) {
-        const formData = new FormData();
-        formData.append('id', id);
-        
-        fetch('/api/delete_ingrediente.php', {
-          method: 'POST',
-          body: formData
+        fetch(GO_API + '/api/ingredientes/' + id, {
+          method: 'DELETE'
         })
         .then(r => r.json())
         .then(result => {

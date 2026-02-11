@@ -126,26 +126,30 @@
   </div>
 
   <script>
+    const GO_API = 'https://websites-api-go-caja-r11.dj3bvg.easypanel.host';
     let ingredients = [];
     let selectedIngredient = null;
 
     // Cargar ingredientes
     async function loadIngredients() {
       try {
-        const response = await fetch('/api/get_ingredientes.php?t=' + Date.now());
+        const response = await fetch(GO_API + '/api/ingredientes');
         const data = await response.json();
         
         if (data.success && data.ingredientes) {
           ingredients = data.ingredientes;
           const select = document.getElementById('ingredient');
+          // Limpiar opciones excepto la primera
+          select.innerHTML = '<option value="">Seleccionar ingrediente...</option>';
           
           ingredients.forEach(ing => {
             const option = document.createElement('option');
             option.value = ing.id;
-            option.textContent = `${ing.name} (Stock: ${ing.stock} ${ing.unit})`;
+            option.textContent = `${ing.name} (Stock: ${ing.current_stock || ing.stock || 0} ${ing.unit})`;
             option.dataset.ingredient = JSON.stringify(ing);
             select.appendChild(option);
           });
+        }
         }
       } catch (error) {
         console.error('Error cargando ingredientes:', error);
