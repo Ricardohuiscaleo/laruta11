@@ -658,7 +658,6 @@ func (s *Server) queryAnalytics() gin.H {
 
 
 // getDashboard - Endpoint consolidado: 8 requests → 1 request
-	}
 	
 	wg.Wait()
 	c.JSON(200, gin.H{"success": true, "data": results})
