@@ -1675,7 +1675,8 @@ export default function App() {
       try {
         const isCashier = !!localStorage.getItem('caja_session');
         const cashierParam = isCashier ? '&cashier=1' : '';
-        const response = await fetch('/api/get_menu_products.php?v=' + Date.now() + cashierParam);
+        const apiUrl = 'https://websites-api-go-caja-r11.dj3bvg.easypanel.host/api/menu?active_only=1&v=' + Date.now() + cashierParam;
+        const response = await fetch(apiUrl);
         const data = await response.json();
         
         if (data.success && data.menuData) {
