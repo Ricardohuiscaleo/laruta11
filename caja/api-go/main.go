@@ -122,6 +122,15 @@ func main() {
 	r.POST("/api/track", s.trackUsage)
 	r.POST("/api/track_usage.php", s.trackUsage) // Alias legacy
 
+	// Comandas & Tracking
+	r.GET("/api/comandas", s.getComandas)
+	r.GET("/api/get_comandas_v2.php", s.getComandas) // Alias legacy
+	r.PUT("/api/comandas/:id/status", s.updateComandaStatus)
+	r.POST("/api/track/visit", s.trackVisit)
+	r.POST("/api/track_visit.php", s.trackVisit) // Alias legacy
+	r.POST("/api/track/interaction", s.trackInteraction)
+	r.POST("/api/track_interaction.php", s.trackInteraction) // Alias legacy
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3002"
